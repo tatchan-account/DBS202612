@@ -10,6 +10,8 @@
 
 # figディレクトリ以下はすべて管理対象
 !/fig/**
+!*.cls
+!*.bst
 
 # .gitignore自身も管理対象
 !/.gitignore
