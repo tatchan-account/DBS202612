@@ -12,6 +12,7 @@
 !/fig/**
 !*.cls
 !*.bst
+!*.sty
 
 # .gitignore自身も管理対象
 !/.gitignore
