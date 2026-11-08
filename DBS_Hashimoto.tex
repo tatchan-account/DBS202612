@@ -1,11 +1,12 @@
 %!LW recipe=pLaTeX (ptex2pdf) -> pbibtex -> ptex2pdf*2
 
 %\documentclass[submit,techrep]{ipsj}
+\PassOptionsToPackage{dvipdfmx}{color}
 \documentclass[submit,techrep,noauthor]{ipsj}
 
+\usepackage[dvipdfmx]{graphicx}
 
-
-\usepackage[dvips]{graphicx}
+% \usepackage[dvips]{graphicx}
 \usepackage{latexsym}
 
 \def\Underline{\setbox0\hbox\bgroup\let\\\endUnderline}
@@ -21,6 +22,33 @@
 %\setcounter{巻数}{59}%vol59=2018
 %\setcounter{号数}{10}
 %\setcounter{page}{1}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+\renewcommand{\algorithmiccomment}[1]{\hfill$\triangleright$~#1}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+
+\newcommand{\lgmerge}{LG$^2$-Merge}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\C}{\mathbb{C}} 
+% \newcommand{\Q}{\mathbb{Q}}
+\newcommand{\T}{\mathbb{T}}
+\newcommand{\K}{\mathbb{K}}
+
+\newcommand{\vb}[1]{\boldsymbol{#1}}
+\renewcommand{\epsilon}{\varepsilon}
+\newcommand{\kcap}{k_{\mathrm{cap}}}
+\newcommand{\ns}[1]{\mathrm{#1}}
+
 
 
 \begin{document}
@@ -42,7 +70,7 @@ $k$-近傍グラフマージアルゴリズム}
 \author{宮崎 純}{Miyazaki Jun}{ISCT}[miyazaki@comp.isct.ac.jp]
 
 \begin{abstract}
-大規模データやデータの逐次的な増加に対応する昨今、独立に構築された$k$-近傍（$k$-NN）グラフをマージすることは有用である。しかし、既存手法では近傍点同士の比較に基づく精製のコストが大きく、近傍数$k$の増加に伴い処理時間が増大するという課題がある。本研究では、サブグラフ内の既存の近傍関係を活用しつつ、部分グラフ間の近傍探索に重点を置いた二層型$k$-NNグラフマージ手法を提案する。提案手法では、サンプリングした点からなる小規模な上位層を用いて探索の開始点を求め、$k$に依存しない探索幅でグラフを探索することで近傍候補を見つける。さらに、対称性の活用やPCA変換空間における距離計算の早期打ち切りにより計算コストを削減する。複数のデータセットを用いた実験により、提案手法は既存手法と比較して$k$の増加に伴う処理時間の増大を抑制し、高速なグラフマージを実現できることを示す。
+大規模データやデータの逐次的な増加に対応する昨今、独立に構築された$k$-近傍（$k$-NN）グラフをマージすることは有用である。しかし、既存手法では近傍点同士の比較に基づく精製のコストが大きく、近傍数$k$の増加に伴い処理時間が増大するという課題がある。本研究では、サブグラフ内の既存の近傍関係を活用しつつ、部分グラフ間の近傍探索に重点を置いた二層型$k$-近傍グラフマージ手法を提案する。提案手法では、サンプリングした点からなる小規模な上位層を用いて探索の開始点を求め、$k$に依存しない探索幅でグラフを探索することで近傍候補を見つける。さらに、対称性の活用やPCA変換空間における距離計算の早期打ち切りにより計算コストを削減する。複数のデータセットを用いた実験により、提案手法は既存手法と比較して$k$の増加に伴う処理時間の増大を抑制し、高速なグラフマージを実現できることを示す。
 \end{abstract}
 
 
@@ -67,93 +95,171 @@ $k$-近傍グラフマージアルゴリズム}
 
 %1
 \section{はじめに}
-$k$-近傍グラフは、各データ点をその点に最も近い$k$個のデータ点と接続するグラフであり、データ点間の局所的な近傍関係を表現するための基本的なデータ構造である。
-$k$-NNグラフは、機械学習 \cite{boiman_defense_2008,flores_analysis_2022}、多様体学習 \cite{yan_graph_2007,belkin_laplacian_2003,roweis_nonlinear_2000}、情報検索 \cite{li_approximate_2020}、データマイニング \cite{brito_connectivity_1997} など、幅広い分野で利用されている。
+$k$-近傍グラフ($k$-Nearest Neighbour Graph; $k$-NN Graph)はは、各データ点をその点に最も近い$k$個のデータ点と接続するグラフであり、多くの分野で応用されるデータ構造である。
+実際、機械学習\cite{boiman_defense_2008,flores_analysis_2022}、多様体学習\cite{yan_graph_2007,belkin_laplacian_2003,roweis_nonlinear_2000}、情報検索\cite{li_approximate_2020}、データマイニング \cite{brito_connectivity_1997}など、幅広い分野で利用されている。
+さらに、$k$-近傍グラフは、グラフベースの近似最近傍探索（Approximate Nearest Neighbor Search; ANNS）で用いられるインデックスの構築の基盤ともなる。例えば、NSG \cite{fu_fast_2019} や CAGRA\cite{ootomo_cagra_2024}は、初期の近似 $k$-近傍グラフを改良したり、枝刈りを行ったりすることで、効率的な探索グラフを構築する。
+したがって、効率的な$k$-近傍グラフの構築は、非常に重要な取り組みと言える。
 
-さらに、$k$-NNグラフは、グラフベースの近似最近傍探索（Approximate Nearest Neighbor Search; ANNS）インデックスを構築するための基盤にもなる。例えば、NSG \cite{fu_fast_2019} や CAGRA \cite{ootomo_cagra_2024} は、初期の近似 $k$-NNグラフを改良したり、枝刈りを行ったりすることで、効率的な探索グラフを構築する。
+しかし、大規模データセットに対する$k$-近傍グラフの構築には大幅な時間を要する。Brute-forceアルゴリズムによるデータ数$n$の$d$次元データに対する$k$-近傍グラフ構築には、$O(dn^2)$の時間計算量を要するが、この計算量は非常に大きい。
 
-したがって、効率的な $k$-NNグラフの構築は、近傍関係を直接利用するアプリケーションだけでなく、大規模な類似検索においても重要である。
-2. $k$-NNグラフ構築の計算コスト
-\(n\) 個の \(d\) 次元データ点に対して、全探索によって厳密な $k$-NNグラフを構築するには、\(O(dn^2)\) の時間計算量を要するため、大規模なデータセットに対しては現実的ではない。
+特に大規模かつ高次元のデータセットにおいて、この問題は顕在化する。
+NN-Descent\cite{dong_efficient_2011}や、そのGPU版であるGNND\cite{wang_fast_2021}などの近似構築アルゴリズムが存在し構築コストを大幅に削減するが、これらの手法を用いた場合でも、大規模なデータセット全体に対して一度にグラフを構築することは、依然として長時間を要する。
 
-この問題は、特に大規模かつ高次元のデータセットにおいて顕著になる。
+これらの問題へのアプローチの一つとして、マージに基づく構築手法がある。
+この手法では、データセットをより小さな部分集合に分割し、それぞれの部分集合に対して独立に$k$-近傍グラフを構築した後、それらをマージすることで一つの大規模なグラフを得る。
+このアプローチにより、サブグラフを独立に構築し、必要に応じて異なる計算環境で並列に処理した後、それらをマージすることによってグラフの構築を行うことができる。
 
-NN-Descent \cite{dong_efficient_2011} や、そのGPU実装であるGNND \cite{wang_fast_2021} などの近似構築アルゴリズムは、計算コストを大幅に削減する。
-
-しかし、これらの手法を用いた場合でも、大規模なデータセット全体に対して一度にグラフを構築することは、依然として困難な場合がある。
-3. グラフマージによる構築
-これに対する別のアプローチとして、マージに基づく構築手法がある。
-
-この手法では、データセットをより小さな部分集合に分割し、それぞれの部分集合に対して独立に $k$-NNグラフを構築した後、それらをマージすることで一つの大規模なグラフを得る。
-
-このアプローチにより、サブグラフを独立に構築し、必要に応じて異なる計算デバイス上で処理した後に、それらをマージすることが可能になる。
-4. 既存グラフの再利用と逐次的な更新
-さらに重要なこととして、グラフマージは、サブグラフがすでに存在する場合にも有用である。
-
-例えば、新たなデータが追加された際には、追加されたデータ点に対して $k$-NNグラフを構築し、それを既存のグラフとマージすることができる。
-
-このように、サブグラフ内の近傍関係を再利用することで、グラフを最初から構築し直す必要がなくなる。
+また、グラフのマージは、サブグラフがすでに存在する場合にも有用である。
+例えば、新たなデータが追加された際には、追加されたデータ点に対して$k$-近傍グラフを構築し、それを既存のグラフとマージし、スクラッチからの再構築を不要にする。また、両者の既存の近傍情報を効率的に活用することもできる。
 
 より一般的には、独立に構築されたグラフが持つ既存の近傍情報を破棄することなく、それらをマージすることが可能である。
 
-これらの性質から、効率的なグラフマージは、$k$-NNグラフのスケーラブルな構築と逐次的な維持・更新の両方において有用である。
-5. 既存手法とその課題
-しかし、既存のグラフマージ手法は、NN-Descentに基づく改良処理に大きく依存している。
+これらの性質から、効率的なグラフマージは、大規模な$k$-近傍グラフ構築とその構造の維持・更新において特に有用である。
 
-S-Merge \cite{zhao_merge_2022} は、ランダムに選択した候補点を用いてサブグラフ間の接続を初期化する。一方、LG²-Merge \cite{hashimoto_lg2merge} は、局所性鋭敏型ハッシュ（Locality-Sensitive Hashing; LSH）を利用して、より有望な候補点を選択することで、その後の改良処理のコストを削減する。
-
-しかし、これらの手法は初期化処理が改善されているものの、いずれもNN-Descentに基づく改良処理に依存しており、各データ点について、各反復で最大 \(O(k^2)\) 回の候補点の比較が必要となる場合がある。
-
+しかし、既存のグラフマージ手法は、NN-Descentに基づく精製に大きく依存している。
+S-Merge\cite{zhao_merge_2022}は、ランダムに選択したグラフの候補点をもとにグラフのマージを行い、NN-Descentベースの精製により精度を向上させる。一方、\lgmerge\cite{hashimoto_lg2merge}は、局所性鋭敏型ハッシュ（LSH）を利用して、より精度の高い候補点を選択することで、その後の精製のコストを削減する。
+ただ、いずれもNN-Descentに基づく改良処理に依存しており、各データ点について、各反復で最大$O(k^2)$回の候補点の比較が必要となる場合がある。
 その結果、$k$ が大きくなるにつれて、改良処理のコストが急速に増大する。
 
-これは、ANNSインデックスのために比較的大きな $k$ を持つ初期グラフを構築する場合に、特に問題となる。
-6. 提案手法 TL-Merge
-本論文では、NN-Descentに基づく改良処理を必要とせず、サブグラフ間の近傍点を効率的に発見する手法、Two-Layer $k$-NN Graph Merging（TL-Merge）を提案する。
+本論文では、ランダムサンプリングを行うことによる階層化と、サブグラフが既持の近傍情報を効率的に活用するマージ手法TL-Mergeを提案する。
 
-本手法の中心となるアイデアは、入力グラフに既存の接続関係を再利用し、サブグラフをまたぐ近傍点の探索を誘導することである。
-
-ここでは、二つのサブグラフをマージする場合を例に、その処理を説明する。
-
-TL-Mergeは、まず各サブグラフから少数の固定数のデータ点をサンプリングし、コンパクトな上位層を構築する。上位層はサンプリングされたデータ点のみから構成され、それらの間に辺は存在しない。
-
-一方のサブグラフに含まれる各データ点に対して、TL-Mergeはもう一方のサブグラフの上位層を利用して、有望な探索開始点を特定する。そして、その探索開始点から既存の近傍リストをたどることで、近傍点を発見する。
-
-発見されたサブグラフ間の近傍候補は、その後、近傍リストに挿入される。
-
-以降の反復処理では、新たに発見されたサブグラフ間の近傍点を含む、更新済みの近傍リストを利用して、さらに候補点を探索し、グラフの精度を段階的に向上させる。
-
-さらに、この改良処理において、各データ点・各反復あたりの候補点に対する距離計算回数は、二つの探索幅パラメータの積によって上限が定められる。これらのパラメータは、$k$ とは独立に設定することができる。
-
+ここでは、2つの$k$-近傍グラフをマージすることを考える。
+TL-Mergeは、まず各サブグラフから少数のデータ点をサンプリングし上位層として配置する。上位層はサンプリングされたデータ点のみから構成され、それらの間に辺は存在しない。
+この上位層を活用して、各点はマージ相手のサブグラフ上の点でサブグラフ上に配置されているものの中で近いものを探し出し、それらを探索開始点として取得する。その後は、その探索開始点の近傍の中から、実際に近い点を探し出す。
+以降は、各点が持つ近傍点とその近傍を利用して、グラフの精度を段階的に向上させるの反復処理を行う。
+さらに、この改良処理において、各データ点・各反復あたりの候補点に対する距離計算回数は、二つの探索幅パラメータの積によって上限が定められる。これらのパラメータは、$k$とは独立に設定することができる。
 加えて、TL-Mergeは、PCAに基づく距離計算の早期打ち切りと、双方向の近傍更新を利用することで、さらなる効率化を実現する。
-7. 本論文の主な貢献
+
 本論文の主な貢献は、以下のとおりである。
+\begin{itemize}
+	\item ランダムサンプリングと階層化を用いた$k$-近傍グラフのマージ手法TL-Mergeを提案する。
+	\item PCAに基づく距離計算の削減と、対象性を活用した近傍更新を導入する。
+	\item 5つのデータセットを用いた実験により、TL-Mergeは$k=100$において、ベースラインに対して最大8.1倍の高速化を達成することを示す。
+	\item TL-Mergeは$k$に関して高いスケーラビリティを持つことを示す。
+	% \item サブグラフ内の既存の近傍関係を再利用し、サブグラフ間の近傍点の発見に重点を置く、二層構造のグラフマージ手法TL-Mergeを提案する。探索幅を固定したグラフウォークにより、候補点に対する距離計算回数が $k$ に対して二次的に増大することを回避する。
+\end{itemize}
 
-1. TL-Mergeの提案
-
-サブグラフ内の既存の近傍関係を再利用し、サブグラフ間の近傍点の発見に重点を置く、二層構造のグラフマージ手法TL-Mergeを提案する。探索幅を固定したグラフウォークにより、候補点に対する距離計算回数が $k$ に対して二次的に増大することを回避する。
-
-2. 距離計算の効率化
-
-   冗長な計算を削減するため、PCAに基づく距離計算の早期打ち切りと、双方向の近傍更新を導入する。前者は、距離計算の対象となる二つのデータ点のいずれの近傍リストも改善できない場合に、その距離計算を安全に打ち切る。一方、後者は、距離計算の対称性を利用する。
-
-3. 既存手法に対する高速化とスケーラビリティ
-
-五つのデータセットを用いた実験により、TL-Mergeは \(k=100\) において、S-Mergeに対して最大8.1倍の高速化を達成することを示す。
-
-さらに、TL-Mergeは $k$ に対して優れたスケーラビリティを示す。具体的には、$k$ を20から100に増加させた際、既存手法ではマージ時間が13～24倍に増加するのに対して、TL-Mergeでは2.6～4.8倍の増加にとどまる。
-
-4. グラフの精度とパラメータに関する評価
-
-   さらに、五つすべてのデータセットにおいて、TL-Mergeは比較手法よりも短い時間で同一のRecall目標値に到達し、近傍距離の誤差も小さいことを示す。
-
-   また、パラメータ感度に関する実験から、比較的小規模な上位層を使用し、網羅的なパラメータ調整を行わなくても、良好な性能を達成できることを示す。
-8. 論文の構成
-本論文の残りの構成は、以下のとおりである。
-
-第 \ref{sec:related-work} 節では、グラフマージ問題を定義し、関連研究を概観する。第 \ref{sec:proposed} 節ではTL-Mergeについて説明し、第 \ref{sec:experiments} 節ではその性能を評価する。最後に、第 \ref{sec:conc} 節で本論文をまとめ、今後の課題について述べる。
+本論文は次のような構成である。
+第\ref{sec:related-work}節では、グラフマージ問題を定義し、関連研究を概観する。第\ref{sec:proposed}節ではTL-Mergeについて説明し、第\ref{sec:experiments}節ではその性能を評価する。最後に、第\ref{sec:conc}節で本論文をまとめ、今後の課題について述べる。
 
 
+\section{問題の定義と関連研究}
+\label{sec:related-work}
+本節では、問題定義及び$k$-近傍グラフの構築手法、近似最近傍探索、および$k$-近傍グラフのマージに関する関連研究を述べる。
 
+\subsection{問題の定義}
+$V \subset \R ^d$を、ユークリッド距離の下での$n$個の$d$次元データ点の集合とする。
+$k$-近傍グラフ$G=(V,E)$とは、各点$\vb{v}\in	V$が$V\setminus\{\vb{v}\}$内の$k$個の最も近い点へと向かう有向辺を持つ有向グラフである。
+点$\vb{v}$の近傍点の集合を$N(\vb{v})$と表し、そのうち距離昇順で近い点$m$個を$N(\vb{v})[1..m]$と表す。
+
+それぞれ頂点集合$V_1$および$V_2$上で独立に構築された2つの$k$-NNグラフ$G_1$および$G_2$が与えられたとき、$k$-NNグラフのマージとは、入力グラフから $V=V_1\cup V_2$に対する$k$-NNグラフを$G_1$および$G_2$を用いて構築することである。
+% $G_i$ における $\vb{v}$ の隣接リストを $N(\vb{v})$ と表記する。
+% また、その入力部分グラフのインデックスを $g(\vb{v})\in\{1,2\}$ と表記する。
+サブグラフのサイズ比は$|V_1|=|V_2|$であるとは仮定しない。また、複数のグラフマージは2-wayマージを繰り返すことで実現可能なため、ここでは2つのグラフのマージに焦点を当てる。
+
+\subsection{$k$-NNグラフの構築}
+Paredesら\cite{paredes_practical_2006}は、距離計算を削減するために距離空間の性質を活用する、正確な$k$-NNグラフの構築手法を提案した。しかし、高次元空間において、距離評価の計算コストが$O(n^{1.9})$に近づくことが報告されている。
+
+そこで、近似$k$-近傍グラフの構築手法は、グラフ構築コストを大きく削減している。
+NN-Descent\cite{dong_efficient_2011}は、「お隣のお隣はまたお隣さんであろう」という考察にもとづいて近傍店を探し出すことによってグラフを構築する手法である。また、NN-DescentにはそのGPU実装であるGNN\cite{wang_fast_2021}も存在する。しかし、GPUでグラフ構築を大幅に高速化できるものの、大規模なデータセットではデバイスメモリの容量が実用上の制約となる可能性がある。
+
+その他の手法として、疎な空間におけるアイテムベースの類似性を活用するもの \cite{boutet_being_2016} や、階層的ランダム分割と近傍伝播を組み合わせたもの\cite{wang_scalable_2012}、分割統治法による構築法Spectral Lanczos Bisection\cite{chen_fast_2009}などが存在する。
+
+\subsection{$k$-NNグラフのマージ}
+2つの$k$-近傍グラフのマージ手法としてS-Merge\cite{zhao_merge_2022}が存在する。S-Mergeは、各点の近傍リストのうち遠い側の半分を、ランダムに選ばれたマージ相手グラフの点置き換え、その後NN-Descentベースの精製により精度を向上させる。
+
+\lgmerge\cite{hashimoto_lg2merge}は、局所性鋭敏型ハッシュ（LSH）を用いて相手グラフから比較的精度の高い近傍候補点を選択することで、S-Mergeの初期化を改善する。これにより、その後の精製に必要な計算コストを削減している。
+
+しかし、S-Mergeおよび{\lgmerge}は依然としてNN-Descentベースの精製が時間的に支配的であり、その候補比較の計算コストは$k^2$に比例して増加する。
+そこで、TL-Mergeは、グラフ探索を行う際の探索幅を制限することで、精製フェーズにかかる時間の短縮を図っている。
+
+\subsection{階層グラフ検索とそのインデックスのマージ}
+HNSW\cite{malkov_efficient_2020}は、広く利用されているグラフベースのANNSである。検索は、疎な上位層から、すべての点を含む最下層に向かって行われる。
+
+HNSWインデックスをマージする方法も提案されており、VeaseyとSharipova \cite{veasey_hnsw_2025}は、サイズの大きなインデックスに、マージ相手の各点を一部挿入し、その後、マージ相手のインデックスにおける近傍情報を活用しながら残りの点を挿入してゆく手法である。
+
+さらに、HNSW-Merger\cite{jin_efficient_2026}では、2つのHNSWインデックスをマージする際に、マージするインデックスのうち小さい方から大きい方へのみ近傍の検索を行い、その検索結果を再利用して追加の検索を行うことなく逆方向の接続を構築することでマージを実現している。
+
+\begin{figure*}[!t]
+    \centering
+    \includegraphics[keepaspectratio, width = \linewidth]{fig/illustration.pdf}
+    \caption{Overview of TL-Merge for a point $\vb{v}\in V_2$ (red) with $k=2$. The three phases are upper-layer search, initial expansion, and graph walk. $\widetilde{G}$ denotes the intermediate graph after initial expansion. The same procedure is applied to points in $V_1$ using the upper layer of $V_2$.}
+    \label{fig:flow}
+\end{figure*}
+
+\section{TL-Merge}
+\label{sec:proposed}
+TL-Mergeは、マージされるサブグラフが持つ$k$-NNグラフがすで持つ近傍情報を効率的に再利用しつつ、探索コストを抑制する。TL-Mergeは、計算コストの高いNN-Descentに基づく精製を適用する代わりに、探索する幅を制限してグラフ探索を行う。
+複数のグラフをマージする場合には2-wayマージを繰り返すことによって実現可能なため、ここでは2つのグラフのマージに焦点を当てる。
+
+TL-Mergeはまず、少数の固定された数の点をサンプリングすることで、各部分グラフに対してコンパクトな上層を構築する。ある部分グラフ内の各点について、TL-Mergeは他方の部分グラフの上層を用いて有望なエントリポイントを特定し、そこから既存の近傍リストを探索して近隣の点を発見する。その後、もう一方のサブグラフから発見された候補が近傍リストに挿入される。
+その後の反復において、TL-Mergeは、新たに発見されたサブグラフ間の近傍を含むこれらの更新された近傍リストを用いて、さらなる候補を探索し、グラフの品質を段階的に向上させる。
+さらに、この精緻化プロセスにおける各点および各反復ごとの距離評価の候補数は、2つの検索幅パラメータの積によって上限が定められており、これらは $k$ とは独立して選択可能です。
+
+また、TL-Merge は、PCA に基づく距離評価の早期終了と双方向更新を取り入れることで、計算コストを削減します。
+
+したがって、提案手法は、有望なクロスサブグラフ候補を特定するための2層検索戦略（節 \ref{subsec:search}）と、PCAに基づく早期終了および双方向更新を用いた効率的な距離評価（節~\ref{subsec:cost}）という2つの主要な構成要素から成る。
+全体の手順は、図 \ref{fig:flow} およびアルゴリズム \ref{alg:tlmerge} に示されている。
+
+\subsection{Two-Layer Search}
+\label{subsec:search}
+For each point $\vb{v}$, TL-Merge maintains a neighbor list $N(\vb{v})$ with a capacity of $2k$.
+Initially, the list contains the $k$ neighbors from the input subgraph and $k$ vacant slots.
+During merge, newly discovered cross-subgraph neighbors are inserted into the list, replacing existing entries only when they are closer.
+The top $k$ neighbors are returned after merging. Unlike S-Merge and LG$^2$-Merge, TL-Merge does not discard any input neighbors during initialization.
+
+Let $g(\vb{v})\in\{1,2\}$ indicate the index of the subgraph containing $\vb{v}$, and let $\bar{g}(\vb{v})$ denote the index of the other subgraph.
+TL-Merge discovers cross-subgraph neighbors through the following three phases.
+\begin{enumerate}
+    \item Phase 1: Upper-layer search\\
+        For each subgraph $V_i$, TL-Merge constructs an upper layer $G^u_i$ by uniformly sampling a fixed number of points. Each point $\vb{v}\in V_i$ scans the upper layer $G^u_j$ of the other subgraph ($i\neq j$) and selects its $k_0$ nearest points, forming a set $L(\vb{v}) ~ (i,j\in\{1,2\})$. These points serve as entry points for exploring the other subgraph.
+
+        For a fixed upper-layer size, the total number of distance evaluations in this phase grows linearly with the dataset size $n$.
+    \item Phase 2: Initial expansion\\
+        For each $\vb{v}$, TL-Merge expands the selected entry points in $L(\vb{v})$. The candidate set consists of the entry points themselves and their top-$k_{m_0}$ neighbors in the other subgraph as $\vb{v}$:
+        \begin{equation*}
+            C(\vb{v}) = L(\vb{v}) \cup \bigcup_{\vb{u}\in L(\vb{v})} N(\vb{u})[1..k_{m_0}]\cap V_{g(\vb{u})}.
+        \end{equation*}
+        TL-Merge evaluates these candidates and retains the closest points in $N(\vb{v})$. This provides initial cross-subgraph connections for the subsequent graph walk.
+    \item Phase 3: Graph walk\\
+        Starting from the initialized graph, similar to NN-Descent, TL-Merge iteratively explores cross-subgraph connections. For each point $\vb{v}$, it selects up to $k_l$ nearest newly inserted cross-subgraph neighbors as frontier points. For each frontier point $\vb{u}$, TL-Merge examines up to $k_m$ points in $N(\vb{u})\cap V_{\bar{g}(\vb{v})}$.
+        This restriction is based on the assumption that the subgraphs are $k$-NN graphs and each point already has a neighbor list within its own subgraph.
+\end{enumerate}
+
+Unlike the NN-Descent-based refinement, this walk evaluates at most $k_l k_m$ candidate pairs per point and iteration.
+By choosing $k_l$ and $k_m$ independently of $k$, TL-Merge avoids the quadratic growth in candidate distance evaluations.
+
+Duplicate candidates are skipped, and recently evaluated pairs are reused or skipped when detected. The walk terminates when the number of successful neighbor updates, normalized by the total neighbor list capacity $2kn$, falls below a threshold $\tau$.
+
+\subsection{Reducing Distance Computation Cost}
+\label{subsec:cost}
+\subsubsection{PCA-ordered early termination}
+Computing the full Euclidean distance for every candidate pair can be expensive in high-dimensional datasets, although many candidates do not improve either endpoint's neighbor list. To reduce this cost, TL-Merge employs early termination based on partial squared Euclidean distances.
+
+Let $U$ be the orthogonal matrix whose columns are the principal components estimated from
+sampled data points, ordered by decreasing variance.
+For a candidate pair $\vb{v}$ and $\vb{u}$, let $\vb{z} = U^\top \vb{v}$ and $\vb{w} = U^\top \vb{u}$. Since $U$ is orthogonal, this transformation preserves Euclidean distances.
+The partial squared distance over the first $m$ components is defined as
+\begin{equation*}
+    D_m(\vb{v},\vb{u}) = \sum_{i=1}^{m} (\vb{z}_{i}-\vb{w}_{i})^2.
+\end{equation*}
+Since every term is nonnegative,
+\begin{equation*}
+    D_m(\vb{v},\vb{u}) \leq d(\vb{v}, \vb{u})^2,
+\end{equation*}
+where $d$ denotes the Euclidean distance function.
+Let $\theta_f$ and $\theta_r$ denote the distances from $\vb{v}$ and from $\vb{u}$ to the farthest entries in $N(\vb{v})$ and $N(\vb{u})$, respectively. TL-Merge uses $\theta = \max(\theta_f,\theta_r)$.
+The partial distance is checked against $\theta$ every $b$ dimensions.
+If $D_m(\vb{v},\vb{u}) \geq \theta ^2$, the candidate cannot improve either neighbor list, and the remaining dimensions are skipped.
+
+Since PCA orders components by decreasing variance, larger distance contributions tend to appear earlier, allowing distant candidates to be rejected before evaluating all dimensions.
+
+\subsubsection{Bidirectional updates}
+Since Euclidean distance is symmetric, each computed distance can potentially update the neighbor lists of both endpoints.
+When evaluating a cross-subgraph pair $(\vb{v},\vb{w})$, TL-Merge considers inserting $\vb{w}$ into $N(\vb{v})$ and $\vb{v}$ into $N(\vb{w})$ using the same distance value.
+This allows both directions to benefit from a single distance evaluation.
+
+During initialization, each evaluated cross-subgraph pair can also generate a reverse-update candidate. However, the neighbor lists initially contain unused slots, which would lead to an infinite acceptance threshold and cause a large number of reverse-update candidates to be buffered. To avoid this overhead, TL-Merge accepts a reverse-update candidate only if its distance is smaller than the distance to the farthest valid neighbor in the target point's original neighbor list.
 
 %2
 \section{投稿の流れ}
