@@ -11,7 +11,7 @@
 
 \def\Underline{\setbox0\hbox\bgroup\let\\\endUnderline}
 \def\endUnderline{\vphantom{y}\egroup\smash{\underline{\box0}}\\}
-\def\|{\verb|}
+% \def\|{\verb|}
 
 
 \makeatletter
@@ -25,9 +25,10 @@
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{algorithmic}
+\usepackage{algorithm}    % float（caption / label 用）
 
-\renewcommand{\algorithmicrequire}{\textbf{Input:}}
-\renewcommand{\algorithmicensure}{\textbf{Output:}}
+\renewcommand{\algorithmicrequire}{\textbf{入力:}}
+\renewcommand{\algorithmicensure}{\textbf{出力:}}
 \renewcommand{\algorithmiccomment}[1]{\hfill$\triangleright$~#1}
 \usepackage{graphicx}
 \usepackage{textcomp}
@@ -49,6 +50,8 @@
 \newcommand{\kcap}{k_{\mathrm{cap}}}
 \newcommand{\ns}[1]{\mathrm{#1}}
 
+\newcommand{\meandist}{R_{\mathrm{dist}}}
+
 
 
 \begin{document}
@@ -57,8 +60,7 @@
 \title{サンプリングと階層化による\\
 $k$-近傍グラフマージアルゴリズム}
 
-\etitle{A $k$-NN Graph Merging Algorithm\\
- on Sampling and Hierachical Structure}
+% \etitle{A $k$-近傍 Graph Merging Algorithm\\ on Sampling and Hierachical Structure}
 
 \affiliate{ISCT}{東京科学大学\\
 2--12--1, Ookayama, Meguro-ku, Tokyo 152--8552, Japan}
@@ -70,7 +72,7 @@ $k$-近傍グラフマージアルゴリズム}
 \author{宮崎 純}{Miyazaki Jun}{ISCT}[miyazaki@comp.isct.ac.jp]
 
 \begin{abstract}
-大規模データやデータの逐次的な増加に対応する昨今、独立に構築された$k$-近傍（$k$-NN）グラフをマージすることは有用である。しかし、既存手法では近傍点同士の比較に基づく精製のコストが大きく、近傍数$k$の増加に伴い処理時間が増大するという課題がある。本研究では、サブグラフ内の既存の近傍関係を活用しつつ、部分グラフ間の近傍探索に重点を置いた二層型$k$-近傍グラフマージ手法を提案する。提案手法では、サンプリングした点からなる小規模な上位層を用いて探索の開始点を求め、$k$に依存しない探索幅でグラフを探索することで近傍候補を見つける。さらに、対称性の活用やPCA変換空間における距離計算の早期打ち切りにより計算コストを削減する。複数のデータセットを用いた実験により、提案手法は既存手法と比較して$k$の増加に伴う処理時間の増大を抑制し、高速なグラフマージを実現できることを示す。
+大規模データやデータの逐次的な増加に対応する昨今、独立に構築された$k$-近傍（$k$-近傍）グラフをマージすることは有用である。しかし、既存手法では近傍点同士の比較に基づく精製のコストが大きく、近傍数$k$の増加に伴い処理時間が増大するという課題がある。本研究では、サブグラフ内の既存の近傍関係を活用しつつ、部分グラフ間の近傍探索に重点を置いた二層型$k$-近傍グラフマージ手法を提案する。提案手法では、サンプリングした点からなる小規模な上位層を用いて探索の開始点を求め、$k$に依存しない探索幅でグラフを探索することで近傍候補を見つける。さらに、対称性の活用やPCA変換空間における距離計算の早期打ち切りにより計算コストを削減する。複数のデータセットを用いた実験により、提案手法は既存手法と比較して$k$の増加に伴う処理時間の増大を抑制し、高速なグラフマージを実現できることを示す。
 \end{abstract}
 
 
@@ -95,79 +97,87 @@ $k$-近傍グラフマージアルゴリズム}
 
 %1
 \section{はじめに}
-$k$-近傍グラフ($k$-Nearest Neighbour Graph; $k$-NN Graph)はは、各データ点をその点に最も近い$k$個のデータ点と接続するグラフであり、多くの分野で応用されるデータ構造である。
-実際、機械学習\cite{boiman_defense_2008,flores_analysis_2022}、多様体学習\cite{yan_graph_2007,belkin_laplacian_2003,roweis_nonlinear_2000}、情報検索\cite{li_approximate_2020}、データマイニング \cite{brito_connectivity_1997}など、幅広い分野で利用されている。
-さらに、$k$-近傍グラフは、グラフベースの近似最近傍探索（Approximate Nearest Neighbor Search; ANNS）で用いられるインデックスの構築の基盤ともなる。例えば、NSG \cite{fu_fast_2019} や CAGRA\cite{ootomo_cagra_2024}は、初期の近似 $k$-近傍グラフを改良したり、枝刈りを行ったりすることで、効率的な探索グラフを構築する。
-したがって、効率的な$k$-近傍グラフの構築は、非常に重要な取り組みと言える。
+$k$-近傍グラフ($k$-NN Graph)は、各データ点をその点に最も近い$k$個のデータ点と接続するグラフであり、多くの分野で応用されるデータ構造である。
+実際、機械学習\cite{boiman_defense_2008,flores_analysis_2022}、多様体学習\cite{yan_graph_2007}、情報検索\cite{li_approximate_2020}、データマイニング \cite{brito_connectivity_1997}など、幅広い分野で利用されている。
+さらに、$k$-近傍グラフは、グラフベースの近似最近傍探索（ANNS）で用いられるインデックスの構築の基盤ともなっている\cite{fu_fast_2019,ootomo_cagra_2024}。
+% 例えば、NSG \cite{fu_fast_2019} や CAGRA\cite{ootomo_cagra_2024}は、初期の近似 $k$-近傍グラフを改良したり、枝刈りを行ったりすることで、効率的な探索グラフを構築する。
+% したがって、効率的な$k$-近傍グラフの構築は、非常に重要な取り組みと言える。
 
-しかし、大規模データセットに対する$k$-近傍グラフの構築には大幅な時間を要する。Brute-forceアルゴリズムによるデータ数$n$の$d$次元データに対する$k$-近傍グラフ構築には、$O(dn^2)$の時間計算量を要するが、この計算量は非常に大きい。
-
-特に大規模かつ高次元のデータセットにおいて、この問題は顕在化する。
-NN-Descent\cite{dong_efficient_2011}や、そのGPU版であるGNND\cite{wang_fast_2021}などの近似構築アルゴリズムが存在し構築コストを大幅に削減するが、これらの手法を用いた場合でも、大規模なデータセット全体に対して一度にグラフを構築することは、依然として長時間を要する。
+しかし、大規模データセットに対する$k$-近傍グラフの構築には大幅な時間を要する。Brute-forceアルゴリズムによるデータ数$n$の$d$次元データに対する$k$-近傍グラフ構築には、$O(dn^2)$の時間計算量を要するが、この計算量は非常に大きい。そこで、近似$k$-近傍グラフ構築手法として、NN-Descent\cite{dong_efficient_2011}や、そのGPU版であるGNND\cite{wang_fast_2021}などが考案された。これらは構築コストを大幅に削減するが、これらの手法を用いた場合でも、大規模なデータセット全体に対して一度にグラフを構築することは、依然として長時間を要する。
 
 これらの問題へのアプローチの一つとして、マージに基づく構築手法がある。
-この手法では、データセットをより小さな部分集合に分割し、それぞれの部分集合に対して独立に$k$-近傍グラフを構築した後、それらをマージすることで一つの大規模なグラフを得る。
-このアプローチにより、サブグラフを独立に構築し、必要に応じて異なる計算環境で並列に処理した後、それらをマージすることによってグラフの構築を行うことができる。
+この手法では、データセットをより小さな部分集合に分割し、それぞれの部分集合に対して独立に$k$-近傍グラフを構築した後、それらをマージすることで一つの大規模なグラフを得ることができる。
+% このアプローチにより、サブグラフを独立に構築し、必要に応じて異なる計算環境で並列に処理した後、それらをマージすることによってグラフの構築を行うことができる。
 
 また、グラフのマージは、サブグラフがすでに存在する場合にも有用である。
-例えば、新たなデータが追加された際には、追加されたデータ点に対して$k$-近傍グラフを構築し、それを既存のグラフとマージし、スクラッチからの再構築を不要にする。また、両者の既存の近傍情報を効率的に活用することもできる。
+例えば、新たなデータが追加された際には、追加されたデータ点に対して$k$-近傍グラフを構築し、それを既存のグラフとマージし、スクラッチからの再構築を不要にする。
+% また、両者の既存の近傍情報を効率的に活用することもできる。
 
-より一般的には、独立に構築されたグラフが持つ既存の近傍情報を破棄することなく、それらをマージすることが可能である。
+% より一般的には、独立に構築されたグラフが持つ既存の近傍情報を壊すことなく、それらをマージすることが可能である。
 
 これらの性質から、効率的なグラフマージは、大規模な$k$-近傍グラフ構築とその構造の維持・更新において特に有用である。
 
-しかし、既存のグラフマージ手法は、NN-Descentに基づく精製に大きく依存している。
-S-Merge\cite{zhao_merge_2022}は、ランダムに選択したグラフの候補点をもとにグラフのマージを行い、NN-Descentベースの精製により精度を向上させる。一方、\lgmerge\cite{hashimoto_lg2merge}は、局所性鋭敏型ハッシュ（LSH）を利用して、より精度の高い候補点を選択することで、その後の精製のコストを削減する。
-ただ、いずれもNN-Descentに基づく改良処理に依存しており、各データ点について、各反復で最大$O(k^2)$回の候補点の比較が必要となる場合がある。
-その結果、$k$ が大きくなるにつれて、改良処理のコストが急速に増大する。
+既存のグラフマージ手法として、S-Merge\cite{zhao_merge_2022}や\lgmerge\cite{hashimoto_lg2merge}があるが、いずれもNN-Descentに基づく精製に依存しており、各データ点について、各反復で最大$O(k^2)$回の候補点の比較が必要となりうる。
+% しかし、既存のグラフマージ手法は、NN-Descentに基づく精製に大きく依存している。
+% S-Merge\cite{zhao_merge_2022}は、ランダムに選択したグラフの候補点をもとにグラフのマージを行い、NN-Descentベースの精製により精度を向上させる。一方、\lgmerge\cite{hashimoto_lg2merge}は、局所性鋭敏型ハッシュ（LSH）を利用して、より精度の高い候補点を選択することで、その後の精製のコストを削減する。
+% ただ、いずれもNN-Descentベースの精製に依存しており、各データ点について、各反復で最大$O(k^2)$回の候補点の比較が必要となる場合がある。
+その結果、$k$ が大きくなるにつれて、コストが急増しうる。しかし、NSG\cite{fu_fast_2019}やCAGRA\cite{ootomo_cagra_2024}等では$k\ge 100$のグラフが用いられるため、大きな$k$での高速な構築は重要な問題である。
 
 本論文では、ランダムサンプリングを行うことによる階層化と、サブグラフが既持の近傍情報を効率的に活用するマージ手法TL-Mergeを提案する。
+本手法は、大きな$k$に対しても高速な高速な$k$-近傍グラフのマージ実現を目指した。
+% ここでは、2つの$k$-近傍グラフをマージすることを考える。
+% TL-Mergeは、まず各サブグラフから少数のデータ点をサンプリングし上位層として配置する。
+% この上位層において、各点はマージ相手のサブグラフ上の点で近いものを探し出し、それらを探索開始点として取得する。その後、その探索開始点とその近傍の中から、実際に近い点を探し出す。
+% 以降は、各点が持つ近傍点とその近傍を利用して、グラフの精度を段階的に向上させるの反復処理を行う。
+% 加えて、TL-Mergeは、PCAに基づく距離計算の早期打ち切りと、双方向の近傍更新を利用する。
+% これらにより、大きな$k$に対しても高速な$k$-近傍グラフのマージ実現を目指す。
 
-ここでは、2つの$k$-近傍グラフをマージすることを考える。
-TL-Mergeは、まず各サブグラフから少数のデータ点をサンプリングし上位層として配置する。上位層はサンプリングされたデータ点のみから構成され、それらの間に辺は存在しない。
-この上位層を活用して、各点はマージ相手のサブグラフ上の点でサブグラフ上に配置されているものの中で近いものを探し出し、それらを探索開始点として取得する。その後は、その探索開始点の近傍の中から、実際に近い点を探し出す。
-以降は、各点が持つ近傍点とその近傍を利用して、グラフの精度を段階的に向上させるの反復処理を行う。
-さらに、この改良処理において、各データ点・各反復あたりの候補点に対する距離計算回数は、二つの探索幅パラメータの積によって上限が定められる。これらのパラメータは、$k$とは独立に設定することができる。
-加えて、TL-Mergeは、PCAに基づく距離計算の早期打ち切りと、双方向の近傍更新を利用することで、さらなる効率化を実現する。
+\begin{figure*}[!t]
+    \centering
+    \includegraphics[keepaspectratio, width = \linewidth]{fig/illustration_ja.pdf}
+    \caption{$k=2$の$k$-近傍グラフに対するTL-Mergeの概要図。$\vb{v}\in V_2$ (赤)のマージを示す。$\widetilde{G}$は各点に対して上位層検索及びそれを用いた候補検索を終えた中間グラフを表す。}
+    \label{fig:flow}
+\end{figure*}
 
-本論文の主な貢献は、以下のとおりである。
+本論文の主な貢献は、次のとおりである。
 \begin{itemize}
 	\item ランダムサンプリングと階層化を用いた$k$-近傍グラフのマージ手法TL-Mergeを提案する。
 	\item PCAに基づく距離計算の削減と、対象性を活用した近傍更新を導入する。
-	\item 5つのデータセットを用いた実験により、TL-Mergeは$k=100$において、ベースラインに対して最大8.1倍の高速化を達成することを示す。
-	\item TL-Mergeは$k$に関して高いスケーラビリティを持つことを示す。
+	\item 5つのデータセットを用いた実験により、TL-Mergeは$k$に関して高いスケーラビリティを持つことを示す。
+	\item TL-Mergeは$k=100$において、ベースラインに対して最大8.1倍の高速化を達成することを示す。
 	% \item サブグラフ内の既存の近傍関係を再利用し、サブグラフ間の近傍点の発見に重点を置く、二層構造のグラフマージ手法TL-Mergeを提案する。探索幅を固定したグラフウォークにより、候補点に対する距離計算回数が $k$ に対して二次的に増大することを回避する。
 \end{itemize}
-
 本論文は次のような構成である。
 第\ref{sec:related-work}節では、グラフマージ問題を定義し、関連研究を概観する。第\ref{sec:proposed}節ではTL-Mergeについて説明し、第\ref{sec:experiments}節ではその性能を評価する。最後に、第\ref{sec:conc}節で本論文をまとめ、今後の課題について述べる。
 
 
+
 \section{問題の定義と関連研究}
 \label{sec:related-work}
-本節では、問題定義及び$k$-近傍グラフの構築手法、近似最近傍探索、および$k$-近傍グラフのマージに関する関連研究を述べる。
+本節では、問題定義及び$k$-近傍グラフのマージ、近似最近傍検索インデックスのマージに関する関連研究を述べる。
+
+
 
 \subsection{問題の定義}
 $V \subset \R ^d$を、ユークリッド距離の下での$n$個の$d$次元データ点の集合とする。
 $k$-近傍グラフ$G=(V,E)$とは、各点$\vb{v}\in	V$が$V\setminus\{\vb{v}\}$内の$k$個の最も近い点へと向かう有向辺を持つ有向グラフである。
 点$\vb{v}$の近傍点の集合を$N(\vb{v})$と表し、そのうち距離昇順で近い点$m$個を$N(\vb{v})[1..m]$と表す。
 
-それぞれ頂点集合$V_1$および$V_2$上で独立に構築された2つの$k$-NNグラフ$G_1$および$G_2$が与えられたとき、$k$-NNグラフのマージとは、入力グラフから $V=V_1\cup V_2$に対する$k$-NNグラフを$G_1$および$G_2$を用いて構築することである。
+それぞれ頂点集合$V_1$および$V_2$上で独立に構築された2つの$k$-近傍グラフ$G_1$および$G_2$が与えられたとき、$k$-近傍グラフをマージする、とは、入力グラフから $V=V_1\cup V_2$に対する$k$-近傍グラフを$G_1$および$G_2$を用いて構築することである。
 % $G_i$ における $\vb{v}$ の隣接リストを $N(\vb{v})$ と表記する。
 % また、その入力部分グラフのインデックスを $g(\vb{v})\in\{1,2\}$ と表記する。
 サブグラフのサイズ比は$|V_1|=|V_2|$であるとは仮定しない。また、複数のグラフマージは2-wayマージを繰り返すことで実現可能なため、ここでは2つのグラフのマージに焦点を当てる。
 
-\subsection{$k$-NNグラフの構築}
-Paredesら\cite{paredes_practical_2006}は、距離計算を削減するために距離空間の性質を活用する、正確な$k$-NNグラフの構築手法を提案した。しかし、高次元空間において、距離評価の計算コストが$O(n^{1.9})$に近づくことが報告されている。
+% \subsection{$k$-近傍グラフの構築}
+% Paredesら\cite{paredes_practical_2006}は、正確な$k$-近傍グラフの構築手法を提案した。しかし、高次元空間において、距離評価の計算コストが$O(n^{1.9})$に近づくことが報告されている。
 
-そこで、近似$k$-近傍グラフの構築手法は、グラフ構築コストを大きく削減している。
-NN-Descent\cite{dong_efficient_2011}は、「お隣のお隣はまたお隣さんであろう」という考察にもとづいて近傍店を探し出すことによってグラフを構築する手法である。また、NN-DescentにはそのGPU実装であるGNN\cite{wang_fast_2021}も存在する。しかし、GPUでグラフ構築を大幅に高速化できるものの、大規模なデータセットではデバイスメモリの容量が実用上の制約となる可能性がある。
+% 一方、近似$k$-近傍グラフの構築手法では、グラフ構築コストを大きく削減している。
+% NN-Descent\cite{dong_efficient_2011}は、「お隣のお隣はまたお隣さんであろう」という考察にもとづいて近傍点を探し出すことによってグラフを構築する手法である。また、NN-DescentにはそのGPU実装であるGNN\cite{wang_fast_2021}も存在する。しかし、GPUでグラフ構築を大幅に高速化できるものの、大規模なデータセットではデバイスメモリの容量が実用上の制約となる可能性がある。
+% その他にも、疎な空間におけるアイテムベースの類似性を活用する手法\cite{boutet_being_2016}や、階層的ランダム分割と近傍伝播を組み合わせたもの\cite{wang_scalable_2012}、分割統治法による構築法Spectral Lanczos Bisection\cite{chen_fast_2009}などが存在する。
 
-その他の手法として、疎な空間におけるアイテムベースの類似性を活用するもの \cite{boutet_being_2016} や、階層的ランダム分割と近傍伝播を組み合わせたもの\cite{wang_scalable_2012}、分割統治法による構築法Spectral Lanczos Bisection\cite{chen_fast_2009}などが存在する。
 
-\subsection{$k$-NNグラフのマージ}
+\subsection{$k$-近傍グラフのマージ}
 2つの$k$-近傍グラフのマージ手法としてS-Merge\cite{zhao_merge_2022}が存在する。S-Mergeは、各点の近傍リストのうち遠い側の半分を、ランダムに選ばれたマージ相手グラフの点置き換え、その後NN-Descentベースの精製により精度を向上させる。
-
 \lgmerge\cite{hashimoto_lg2merge}は、局所性鋭敏型ハッシュ（LSH）を用いて相手グラフから比較的精度の高い近傍候補点を選択することで、S-Mergeの初期化を改善する。これにより、その後の精製に必要な計算コストを削減している。
 
 しかし、S-Mergeおよび{\lgmerge}は依然としてNN-Descentベースの精製が時間的に支配的であり、その候補比較の計算コストは$k^2$に比例して増加する。
@@ -176,541 +186,394 @@ NN-Descent\cite{dong_efficient_2011}は、「お隣のお隣はまたお隣さ�
 \subsection{階層グラフ検索とそのインデックスのマージ}
 HNSW\cite{malkov_efficient_2020}は、広く利用されているグラフベースのANNSである。検索は、疎な上位層から、すべての点を含む最下層に向かって行われる。
 
-HNSWインデックスをマージする方法も提案されており、VeaseyとSharipova \cite{veasey_hnsw_2025}は、サイズの大きなインデックスに、マージ相手の各点を一部挿入し、その後、マージ相手のインデックスにおける近傍情報を活用しながら残りの点を挿入してゆく手法である。
-
+HNSWインデックスをマージする方法も提案されており、Veasey, Sharipova \cite{veasey_hnsw_2025}は、サイズの大きなインデックスに、マージ相手の各点を一部挿入し、その後、マージ相手のインデックスにおける近傍情報を活用しながら残りの点を挿入してゆく手法である。
 さらに、HNSW-Merger\cite{jin_efficient_2026}では、2つのHNSWインデックスをマージする際に、マージするインデックスのうち小さい方から大きい方へのみ近傍の検索を行い、その検索結果を再利用して追加の検索を行うことなく逆方向の接続を構築することでマージを実現している。
 
-\begin{figure*}[!t]
-    \centering
-    \includegraphics[keepaspectratio, width = \linewidth]{fig/illustration.pdf}
-    \caption{Overview of TL-Merge for a point $\vb{v}\in V_2$ (red) with $k=2$. The three phases are upper-layer search, initial expansion, and graph walk. $\widetilde{G}$ denotes the intermediate graph after initial expansion. The same procedure is applied to points in $V_1$ using the upper layer of $V_2$.}
-    \label{fig:flow}
-\end{figure*}
 
 \section{TL-Merge}
 \label{sec:proposed}
-TL-Mergeは、マージされるサブグラフが持つ$k$-NNグラフがすで持つ近傍情報を効率的に再利用しつつ、探索コストを抑制する。TL-Mergeは、計算コストの高いNN-Descentに基づく精製を適用する代わりに、探索する幅を制限してグラフ探索を行う。
-複数のグラフをマージする場合には2-wayマージを繰り返すことによって実現可能なため、ここでは2つのグラフのマージに焦点を当てる。
+TL-Mergeは、マージされるサブ$k$-近傍グラフがすで持つ近傍情報を効率的に再利用しつつ、探索コストを抑制する。
+% TL-Mergeは、反復処理によりより近い点を探索する際、探索する幅を制限してグラフ探索を行う。
+なお、複数のグラフをマージする場合には2-wayマージを繰り返すことによって実現可能なため、ここでは2つのグラフのマージに焦点を当てる。
 
-TL-Mergeはまず、少数の固定された数の点をサンプリングすることで、各部分グラフに対してコンパクトな上層を構築する。ある部分グラフ内の各点について、TL-Mergeは他方の部分グラフの上層を用いて有望なエントリポイントを特定し、そこから既存の近傍リストを探索して近隣の点を発見する。その後、もう一方のサブグラフから発見された候補が近傍リストに挿入される。
-その後の反復において、TL-Mergeは、新たに発見されたサブグラフ間の近傍を含むこれらの更新された近傍リストを用いて、さらなる候補を探索し、グラフの品質を段階的に向上させる。
-さらに、この精緻化プロセスにおける各点および各反復ごとの距離評価の候補数は、2つの検索幅パラメータの積によって上限が定められており、これらは $k$ とは独立して選択可能です。
+TL-Mergeはまず、各サブ$k$-近傍グラフに対して少数の点をランダムサンプリングして上位層を作成し、その上位層を活用しながら近い点を複数取得する。そして取得した点とその近傍点を候補として、現状の近傍を更新する。
+その後は反復処理によって、近傍の近傍を戦略的に探索し、グラフの品質を段階的に向上させる。
+% この反復処理における各点および各反復ごとの距離計算は、$k$とは独立な探索幅パラメータによって上限が定めることで探索の幅を限定し計算量の削減を行っている。
+% TL-Mergeはまず、少数の固定された数の点をサンプリングすることで、各サブ$k$-近傍グラフに対して小規模な上位層を構築する。部分グラフ内の各点について、TL-Mergeは他方の部分グラフの上層を用いて有望な近傍点を特定し、そこから見つかった近傍候補点が持つ既存の近傍を探索してより近い点を探索する。
+% その後は反復処理によって、近傍の近傍を戦略的に探索し、グラフの品質を段階的に向上させる。
+% この反復処理における各点および各反復ごとの距離計算は、$k$とは独立な探索幅パラメータによって上限が定めることで探索の幅を限定し計算量の削減を行っている。
+また、TL-Mergeは、PCAに基づく距離計算における枝刈りと双方向更新を取り入れることで、計算コストを削減する。
 
-また、TL-Merge は、PCA に基づく距離評価の早期終了と双方向更新を取り入れることで、計算コストを削減します。
+したがって、TL-Mergeは階層化を用いた近傍候補点探索（第\ref{subsec:search}節）と、PCAに基づく早期終了および双方向更新を用いた枝刈り（第\ref{subsec:cost}節）の2要素からなる。
 
-したがって、提案手法は、有望なクロスサブグラフ候補を特定するための2層検索戦略（節 \ref{subsec:search}）と、PCAに基づく早期終了および双方向更新を用いた効率的な距離評価（節~\ref{subsec:cost}）という2つの主要な構成要素から成る。
-全体の手順は、図 \ref{fig:flow} およびアルゴリズム \ref{alg:tlmerge} に示されている。
+手法の全体像は、図\ref{fig:flow}およびAlgorithm\ref{alg:tlmerge}に示した。
 
-\subsection{Two-Layer Search}
+\subsection{2階層での近傍探索}
 \label{subsec:search}
-For each point $\vb{v}$, TL-Merge maintains a neighbor list $N(\vb{v})$ with a capacity of $2k$.
-Initially, the list contains the $k$ neighbors from the input subgraph and $k$ vacant slots.
-During merge, newly discovered cross-subgraph neighbors are inserted into the list, replacing existing entries only when they are closer.
-The top $k$ neighbors are returned after merging. Unlike S-Merge and LG$^2$-Merge, TL-Merge does not discard any input neighbors during initialization.
+各点$\vb{v}$について、TL-Mergeは$2k$の近傍リスト$N(\vb{v})$を保持する。
+初期状態では、このリストは入力部分グラフからの$k$個の近傍と$k$個の空きスロットからなる。
+% マージ中、新サブグラフ間の隣接点はリストに挿入され、既存のエントリがそれよりも遠い場合にのみ置き換えられる。
+マージ後、最終的には上位$k$個の近傍点が出力となる。S-MergeやLG$^2$-Mergeとは異なり、TL-Mergeは既存の近傍情報を全て保持したままマージを進める。
 
-Let $g(\vb{v})\in\{1,2\}$ indicate the index of the subgraph containing $\vb{v}$, and let $\bar{g}(\vb{v})$ denote the index of the other subgraph.
-TL-Merge discovers cross-subgraph neighbors through the following three phases.
+TL-Mergeは、以下の3つのステップ(1)〜(3)からなる。
+なお、$g(\vb{v})\in\{1,2\}$は$\vb{v}$を含むサブ$k$-近傍グラフの添字（インデックス）を、$\bar{g}(\vb{v})$はもう一方のサブグラフの添字を表す。
 \begin{enumerate}
-    \item Phase 1: Upper-layer search\\
-        For each subgraph $V_i$, TL-Merge constructs an upper layer $G^u_i$ by uniformly sampling a fixed number of points. Each point $\vb{v}\in V_i$ scans the upper layer $G^u_j$ of the other subgraph ($i\neq j$) and selects its $k_0$ nearest points, forming a set $L(\vb{v}) ~ (i,j\in\{1,2\})$. These points serve as entry points for exploring the other subgraph.
-
-        For a fixed upper-layer size, the total number of distance evaluations in this phase grows linearly with the dataset size $n$.
-    \item Phase 2: Initial expansion\\
-        For each $\vb{v}$, TL-Merge expands the selected entry points in $L(\vb{v})$. The candidate set consists of the entry points themselves and their top-$k_{m_0}$ neighbors in the other subgraph as $\vb{v}$:
+    \item 上位層探索\\
+        各サブ$k$-近傍グラフ$V_i$に対して、一定数の点を一様サンプリングし上位層$G^u_i$を構築する。各点$\vb{v}\in V_i$は、マージ相手のグラフの上位層$G^u_j$を探索し、その中から$k_0$個の近い点を$L(\vb{v})$に加える($i,j\in\{1,2\}, i\neq j$)。
+		% これらの点は、他の部分グラフを探索するためのエントリポイントとなる。
+		% 上位層上の点の数が固定されているため、このフェーズにおける距離評価の総数は、データセットのサイズ$n$に比例する。
+    \item 初期展開\\
+        各$\vb{v}$について、TL-Mergeは$L(\vb{v})$の点の近傍をさらに展開し、各点の上位$k_{m_0}$個を候補集合$C(\vb{v})$とする。すなわち、
         \begin{equation*}
-            C(\vb{v}) = L(\vb{v}) \cup \bigcup_{\vb{u}\in L(\vb{v})} N(\vb{u})[1..k_{m_0}]\cap V_{g(\vb{u})}.
+            C(\vb{v}) = L(\vb{v}) \cup \bigcup_{\vb{u}\in L(\vb{v})} N(\vb{u})[1..k_{m_0}]\cap V_{g(\vb{u})}
         \end{equation*}
-        TL-Merge evaluates these candidates and retains the closest points in $N(\vb{v})$. This provides initial cross-subgraph connections for the subsequent graph walk.
-    \item Phase 3: Graph walk\\
-        Starting from the initialized graph, similar to NN-Descent, TL-Merge iteratively explores cross-subgraph connections. For each point $\vb{v}$, it selects up to $k_l$ nearest newly inserted cross-subgraph neighbors as frontier points. For each frontier point $\vb{u}$, TL-Merge examines up to $k_m$ points in $N(\vb{u})\cap V_{\bar{g}(\vb{v})}$.
-        This restriction is based on the assumption that the subgraphs are $k$-NN graphs and each point already has a neighbor list within its own subgraph.
+		である。これらの中から、既存近傍と比較して近傍になりうるものを追加する。
+	\item グラフウォーク\\
+        (1), (2)によって得られたグラフを起点として、NN-Descentと同様に、TL-Mergeはサブグラフ間の接続を反復的に探索する。各点$\vb{v}$について、新たに挿入されたマージ相手グラフの近傍のうち、最大$k_l$個の各近傍の上位$k_m$に対して距離計算を行い、必要に応じて近傍を更新する。
+		% なお、サブ$k$-近傍グラフは十分に高精度なサブグラフであり、対象の点$\vb{v}$が属していたグラフ内には現状よりも良い近傍は見つからないと言う仮定に基づいている。
 \end{enumerate}
+このうち、(1)の上位層探索では、上位層の点数がハイパーパラメータで与えられるため、その探索はデータセットサイズ$n$に比例する。また、(3)では点$\vb{v}$に対しては、$V_{\bar{g}(\vb{v})}$の点のみと距離計算を行う。これはサブ$k$-近傍グラフは十分に高精度であり、対象の点$\vb{v}$が属していたグラフ内には現状よりも良い近傍は見つからないと言う仮定に基づいている。
+さらに、NN-Descentベースの精製とは異なり、この探索では、各点に対して1回の反復で高々$k_l k_m$組の点の距離計算を行う。また、$k_l$と$k_m$を$k$とは独立に決まるパラメータのため、TL-Mergeは距離計算が2時間数に比例して増加するのを防ぐ。
 
-Unlike the NN-Descent-based refinement, this walk evaluates at most $k_l k_m$ candidate pairs per point and iteration.
-By choosing $k_l$ and $k_m$ independently of $k$, TL-Merge avoids the quadratic growth in candidate distance evaluations.
+加えて、直近に評価されたペアは距離計算は行わない。
+また、更新された近傍の数が一定以下になったタイミングでグラフウォークを停止する。
 
-Duplicate candidates are skipped, and recently evaluated pairs are reused or skipped when detected. The walk terminates when the number of successful neighbor updates, normalized by the total neighbor list capacity $2kn$, falls below a threshold $\tau$.
-
-\subsection{Reducing Distance Computation Cost}
+\subsection{距離計算コストの削減}
 \label{subsec:cost}
-\subsubsection{PCA-ordered early termination}
-Computing the full Euclidean distance for every candidate pair can be expensive in high-dimensional datasets, although many candidates do not improve either endpoint's neighbor list. To reduce this cost, TL-Merge employs early termination based on partial squared Euclidean distances.
-
-Let $U$ be the orthogonal matrix whose columns are the principal components estimated from
-sampled data points, ordered by decreasing variance.
-For a candidate pair $\vb{v}$ and $\vb{u}$, let $\vb{z} = U^\top \vb{v}$ and $\vb{w} = U^\top \vb{u}$. Since $U$ is orthogonal, this transformation preserves Euclidean distances.
-The partial squared distance over the first $m$ components is defined as
-\begin{equation*}
-    D_m(\vb{v},\vb{u}) = \sum_{i=1}^{m} (\vb{z}_{i}-\vb{w}_{i})^2.
-\end{equation*}
-Since every term is nonnegative,
-\begin{equation*}
-    D_m(\vb{v},\vb{u}) \leq d(\vb{v}, \vb{u})^2,
-\end{equation*}
-where $d$ denotes the Euclidean distance function.
-Let $\theta_f$ and $\theta_r$ denote the distances from $\vb{v}$ and from $\vb{u}$ to the farthest entries in $N(\vb{v})$ and $N(\vb{u})$, respectively. TL-Merge uses $\theta = \max(\theta_f,\theta_r)$.
-The partial distance is checked against $\theta$ every $b$ dimensions.
-If $D_m(\vb{v},\vb{u}) \geq \theta ^2$, the candidate cannot improve either neighbor list, and the remaining dimensions are skipped.
-
-Since PCA orders components by decreasing variance, larger distance contributions tend to appear earlier, allowing distant candidates to be rejected before evaluating all dimensions.
-
-\subsubsection{Bidirectional updates}
-Since Euclidean distance is symmetric, each computed distance can potentially update the neighbor lists of both endpoints.
-When evaluating a cross-subgraph pair $(\vb{v},\vb{w})$, TL-Merge considers inserting $\vb{w}$ into $N(\vb{v})$ and $\vb{v}$ into $N(\vb{w})$ using the same distance value.
-This allows both directions to benefit from a single distance evaluation.
-
-During initialization, each evaluated cross-subgraph pair can also generate a reverse-update candidate. However, the neighbor lists initially contain unused slots, which would lead to an infinite acceptance threshold and cause a large number of reverse-update candidates to be buffered. To avoid this overhead, TL-Merge accepts a reverse-update candidate only if its distance is smaller than the distance to the farthest valid neighbor in the target point's original neighbor list.
-
-%2
-\section{投稿の流れ}
-
-
-%2.1
-\subsection{準備}
-
-情報処理学会論文誌ジャーナルの\LaTeX スタイルファイルを含む論文執筆キットは
-\begin{quote}
-aaa
-\end{quote}
-からダウンロードすることができる．論文執筆キットは以下のファイルを含んで
-いる．
-実行環境としては\LaTeXe を前提としているので，準備されたい．
-
-
-
-
-
-
-
-%2.2
-\subsection{原稿の作成と投稿}
-
-本稿に従って用意した投稿用原稿の\LaTeX ソースからpdfファイルを作成し，
-(**部分は研究会の略称，DBS等)の研究会投稿システムにて，指示にし従い投稿する．
-
-
-
-
-
-
-
-%3
-\section{論文フォーマットの指針}
-\label{sec:format}
-
-以下，情報処理学会論文誌ジャーナル用スタイルファイルを用いた論文フォーマットの指針について述べるので，
-これに従って原稿を用意頂きたい．
-\LaTeX を用いた一般的な文章作成技術については，
-\cite{okumura, companion} 等を参考にされたい．
-
-
-
-%4
-\section{論文の構成}
-\label{config}
-
-ファイルは次のようになる．下線部は投稿時に省略可能なもの．
-
-
-%4.1
-\subsection{表題・著者名等}
-
-表題，著者名とその所属，および概要を前述のコマンドや環境により{\bf 和文と
-英文の双方について}定義した後， によって出力する．
-
-
-\newpage%%%%%
-
-%4.1.1
-\subsubsection{表題} 
-
-%4.2.3
-\subsubsection{フォントサイズ}
-
-フォントサイズは，スタイルファイルによって自動的に設定されるため，
-基本的には著者が自分でフォントサイズを変更する必要はない．
-
-%4.2.4
-\subsubsection{句読点}
-
-句点には全角の「．」，
-読点には全角の「，」を用いる．
-ただし英文中や数式中で「.」や「,」を使う場合には，
-半角文字を使う．「。」や「、」は使わない．
-
-
-
-%4.2.5
-\subsubsection{全角文字と半角文字}
-
-全角文字と半角文字の両方にある文字は次のように使い分ける．
-
-\begin{enumerate}
-\item 括弧は全角の「（」と「）」を用いる．但し，英文の概要，図表見出し，
-書誌データでは半角の「(」と「)」を用いる．
-
-\item 英数字，空白，記号類は半角文字を用いる．ただし，句読点に関しては，
-前項で述べたような例外がある．
-
-\item カタカナは全角文字を用いる．
-
-\end{enumerate}
-
-%4.2.6
-\subsubsection{箇条書}
-
-
-%4.2.7
-\subsubsection{脚注}
-
-
-
-また場合によっては，
-脚注をつけた位置と脚注本体とを別の段に置く方がよいこともある．
-
-
-なお，脚注番号は論文内で通し番号で出力される．
-
-
-
-
-%4.2.8
-\subsubsection{OverfullとUnderfull}
-
-組版時にはoverfullを起こさないことを原則としている．
-従って，まず提出するソースが著者の環境でoverfullを起こさないように，
-文章を工夫するなどの最善の努力を払っていただきたい．
-
-また著者の執筆時点では発生しないoverfullが，
-組版時の環境では発生することもある．
-このような事態をできるだけ回避するために，
-パラグラフの先頭付近では長い英単語を使用しない，
-などの注意を払うようにして頂きたい．
-
-
-
-
-%4.3
-\subsection{数式}\label{sec:Item}
-
-%4.3.1
-\subsubsection{本文中の数式}
-
-\subsubsection{別組の数式}
-
-%
-\begin{equation}
-\Delta_l = \sum_{i=l|1}^L\delta_{pi}
-\end{equation}
-%
-のように，センタリングではなく固定字下げで数式を出力し，
-かつ背が高い数式による行送りの乱れを吸収する機能がある．
-
-%4.3.3
-\subsubsection{eqnarray環境}
-
-互いに関連する別組の数式が2行以上連続して現れる場合には，
-．
-
-
-%4.3.4
-\subsubsection{数式のフォント}
-
-\LaTeX が標準的にサポートしているもの以外の特殊な数式用フォントは，
-できるだけ使わないようにされたい．
-どうしても使用しなければならない場合には，
-その旨申し出て頂くとともに，
-組版工程に深く関与して頂くこともあることに留意されたい．
-
-
-
-
-
-
-
-%4.4
-\subsection{図}
-
-1段の幅におさまる図は，
-
-
-
-また紙面スペースの節約のために，
-
-
-
-
-2段の幅にまたがる図は，
-
-
-
-図の中身では本文と違い，
-どのような大きさのフォントを使用しても構わない（\figref{fig:double} 参照）．
-また図の中身として，encapsulate されたPostScriptファイル（いわゆるEPSファイル）を読み込むこともできる．
-読み込みのためには，プリアンブルで
-%
-
-
-
-
-%4.5
-\subsection{表}
-
-表の罫線はなるべく少なくするのが，仕上がりをすっきりさせるコツである．
-罫線をつける場合には，
-一番上の罫線には二重線を使い，左右の端には縦の罫線をつけない （\tabref{tab:example}）．
-
-
-
-また，表の上に和文と英文の双方の見出しを，
-
-
-\begin{table}[tb] 
-\caption{表の例} 
-\ecaption{An Example of Table.}
-\label{tab:example}
-\hbox to\hsize{\hfil
-\begin{tabular}{l|lll}\hline\hline
-& column1 & column2 & column3 \\\hline
-row1 &	item 1,1 & item 2,1 & ---\\
-row2 &	---      & item 2,2 & item 3,2 \\
-row3 &	item 1,3 & item 2,3 & item 3,3 \\
-row4 &	item 1,4 & item 2,4 & item 3,4 \\\hline
-\end{tabular}\hfil}
+\subsubsection{PCAに基づく距離計算の早期打ち切り}
+高次元データセットにおいて、すべての候補点の組に対して完全なユークリッド距離を計算することは、大きな計算コストを要する。
+% このコストを削減するため、TL-Mergeでは、ユークリッド距離の二乗の部分和が閾値を超え場合には、残りの距離計算を打ち切る。
+
+% TL-Mergeでは、PCAに基づき各ベクトルの成分が分散の大きい順になるよう回転し距離計算を行う。
+TL-Mergeでは、サンプリングされたデータ点から推定した主成分を列ベクトルとし、分散の大きい順に並べた直交行列を用いてデータを回転する。この素で距離計算を行い、上位第$m$成分までの距離を計算した時点で近傍になり得ない点はその時点で距離計算を終了する$(m\in\N)$。これは、PCAでは主成分が分散の大きい順に並べられるため、距離への寄与が大きい成分が先に現れる傾向があることを活用している。
+
+% $U$を、サンプリングされたデータ点から推定した主成分を列ベクトルとし、分散の大きい順に並べた直交行列とする。
+% 候補点の組$\vb{v}$と$\vb{u}$に対して、$\vb{z} = U^\top \vb{v}$および$\vb{w} = U^\top \vb{u}$とする。$U$は直交行列ゆえ、この変換はユークリッド距離を保つ。第1成分から第$m$成分までの距離の二乗の部分和を、
+% \begin{equation*}
+%     D_m(\vb{v},\vb{u}) = \sum_{i=1}^{m} (\vb{z}_{i}-\vb{w}_{i})^2
+% \end{equation*}
+% と定める。各項は非負のため、
+% \begin{equation*}
+%     D_m(\vb{v},\vb{u}) \leq d(\vb{v}, \vb{u})^2,
+% \end{equation*}
+% が成り立つ。ここで、$d$はユークリッド距離関数を表す。
+% $\theta_f$および$\theta_r$を、それぞれ$\vb{v}$から$N(\vb{v})$内の最も遠い点までの距離、および$\vb{u}$から$N(\vb{u})$内の最も遠い点までの距離とし、$\theta = \max(\theta_f,\theta_r)$としたとき、
+% 部分距離は$b$次元ごとに$\theta$と比較して$D_m(\vb{v},\vb{u}) \geq \theta^2$が成り立った時点で、その候補点はどちらの近傍リストも改善できないため、残りの次元の計算を省略する。
+
+% PCAでは主成分が分散の大きい順に並べられるため、距離への寄与が大きい成分が先に現れる傾向がある。
+% これにより、すべての次元を評価する前に、距離の大きい候補点を棄却することが可能になる。
+
+\subsubsection{双方向更新}
+ユークリッド距離は対称性があるため、一度計算した距離を用いて、両端点の近傍リストを更新できる可能性がある。
+サブグラフ間の点の組$(\vb{v},\vb{w})$を評価する際、TL-Mergeは同一の距離値を用いて、$\vb{w}$を$N(\vb{v})$に挿入することと、$\vb{v}$を$N(\vb{w})$に挿入することの両方を検討する。
+これにより、1回の距離計算を双方向の更新に利用できる。
+
+初期化処理においても、評価されたサブグラフ間の点の組から、逆方向の更新候補を生成できる。ただし、逆方向の更新では、現在の近傍における最遠方の点よりも近い場合のみ更新を適用することとしている。
+% しかし、初期状態の近傍リストには未使用のリスト部分が存在するため、任意の点を受け入れる可能性が発生し、大量の逆方向更新候補が発生することにつながる。これを回避するため、TL-Mergeでは、逆方向の更新候補の距離が、更新先の点の元の近傍リストに含まれる近傍点のうち、最も遠い点までの距離よりも小さい場合にのみ、その候補を受け入れる。
+% 初期状態の近傍リストには未使用のリスト部分が存在するため、逆方向の更新候補の距離が、更新先の点の元の近傍リストに含まれる近傍点のうち、最も遠い点までの距離よりも小さい場合にのみ、その候補を受け入れる。め、任意の点を受け入れる可能性が発生し、大量の逆方向更新候補が発生することにつながる。
+% これを回避するため、TL-Mergeでは、
+
+\begin{algorithm}[t]
+    \caption{TL-Merge}
+    \label{alg:tlmerge}
+    \small
+    \begin{algorithmic}[1]
+        \REQUIRE サブグラフ$G_1,G_2$; $|G^u_i|$; $k_0,k_{m_0},k_l,k_m$; 閾値$\tau$
+        \ENSURE マージされた$V_1\cup V_2$に対する$k$-近傍グラフ
+
+        \STATE PCA基底の推定とそれに基づく回転
+        \FORALL{$\vb{v}\in V$}
+            \STATE $N(\vb{v})$を既存の近傍と$k$個の空き枠で初期化
+        \ENDFOR
+        \STATE 上位層$G^u_1\subset V_1$, $G^u_2\subset V_2$をランダムサンプリングし作成
+
+        \STATE \textbf{(1) 上位層探索}
+        \FORALL{$\vb{v}\in V$}
+            \STATE $L(\vb{v})\gets
+                \textsc{UpperSearch}(
+                \vb{v},G^u_{\bar g(\vb{v})},k_0)$
+            \label{alg:p1}
+        \ENDFOR
+
+        \STATE \textbf{(2) 初期展開}
+        \FORALL{$\vb{v}\in V$}
+            \STATE $C(\vb{v})\gets L(\vb{v})\cup
+                \displaystyle\bigcup_{\vb{u}\in L(\vb{v})}
+                N(\vb{u})[1..k_{m_0}]\cap V_{g(\vb{u})}$
+            \STATE $\textsc{InitialExpand}(
+                \vb{v},C(\vb{v}),N(\vb{v}))$
+            \label{alg:p2}
+            \STATE 逆方向の更新を適用
+        \ENDFOR
+        % \STATE Apply buffered reverse updates
+
+        \STATE \textbf{(3) グラフウォーク}
+        \STATE $N_{\mathrm{cur}} \gets N$
+        \REPEAT
+            \STATE $N_{\mathrm{next}}\gets N_{\mathrm{cur}}$; $N_{\mathrm{next}}$のフラグをクリア
+            \FORALL{$\vb{v}\in V$}
+                \STATE $F(\vb{v})\gets
+                    \textsc{TopNewCross}(
+                    N_{\mathrm{cur}}(\vb{v}),k_l)$
+                \FORALL{$\vb{u}\in F(\vb{v})$}
+                    \FORALL{$\vb{w}\in
+                        N_{\mathrm{cur}}(\vb{u})
+                        [1..k_m]\cap V_{g_{(\vb{u})}}$}
+                        \STATE $d \gets\textsc{Eval}(\vb{v},\vb{w},\theta_{\vb{v}})$
+                        \IF{$d < \theta_{\vb{v}}$}
+                            \STATE$\vb{w}$を$N_{\mathrm{next}}(\vb{v})$に挿入\label{alg:p3}
+                        \ENDIF
+                        
+                    \ENDFOR
+                \ENDFOR
+            \ENDFOR
+            % \STATE Apply buffered reverse updates to $N_{\mathrm{next}}$
+            \STATE $r\gets
+                \frac{\text{この反復で更新された回数}}{2kn}$
+            \STATE $N_{\mathrm{cur}}\gets N_{\mathrm{next}}$
+        \UNTIL{$r<\tau$}
+        \label{alg:stop}
+
+        \RETURN $N_{\mathrm{cur}}(\vb{v})$の上位$k$近傍
+            
+        \item[] \textbf{function}
+        \textsc{Eval}$(\vb{v},\vb{w},\theta_f)$
+            \STATE $\theta_r \gets
+                \textsc{ReverseThreshold}(\vb{w})$
+            \STATE $d \gets \textsc{BoundedDist}(\vb{v},\vb{w},\max\{\theta_f,\theta_r\})$
+            \IF{$d < \theta_r$}
+                \STATE 逆方向$(\vb{w}\leftarrow\vb{v},d)$の更新を適用
+            \ENDIF
+            \RETURN $d$
+    \end{algorithmic}
+\end{algorithm}
+
+\section{評価実験}
+\label{sec:experiments}
+本節では、5つの実データセットを用いて、TL-MergeをS-MergeおよびLG$^2$-Mergeと比較し、マージ時間と得られる$k$-近傍グラフの品質を評価する。
+特記のない限り、各データセットを互いに素な同じサイズの2つの部分集合$V_1$と$V_2$に分割する。
+それぞれの部分集合に対して個別に$k$-近傍グラフを構築し、これら2つのグラフをマージすることで、$V=V_1\cup V_2$上のグラフを構築する。ここでは、$k\in\{20,40,60,80,100\}$について評価を行う。
+
+\subsection{実験環境}
+すべての実験は、Intel Core Ultra 9プロセッサ（最大5.70\,GHz）と128\,GBのRAMを搭載し、Ubuntu 24.04 LTSを実行するマシン上で行った。すべての手法をC++で実装し、アルゴリズムの逐次実行性能を評価するため、単一のCPUスレッドで実行した。
+
+表\ref{tab:datasets}に、実験で使用した5つのデータセットについて、データ点数$n$、次元数$d$、評価用データ点数$|V'|$を示す。また、この表には、主要な実験においてTL-Mergeが使用する、各サブグラフの上位層のサイズも示している。
+\begin{table}[h]
+    \centering
+    \caption{データセットの特徴と主要な実験設定}
+    \label{tab:datasets}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{lrrrr}
+        \toprule
+        データセット & $n$ & $d$ & $|V'|$ & 上位層点数 \\
+        \midrule
+        MNIST    & 60,000     & 784 & 60,000    & 250 \\
+        SIFT100K & 100,000    & 128 & 100,000 & 250 \\
+        SIFT1M   & 1,000,000  & 128 & 1,000,000 & 500 \\
+        GIST1M   & 1,000,000  & 960 & 10,000    & 500 \\
+        SIFT10M  & 10,000,000 & 128 & 10,000    & 500 \\
+        \bottomrule
+    \end{tabular}
 \end{table}
 
+\begin{figure*}[!t]
+    \centering
+    \includegraphics[keepaspectratio, width=.8\linewidth]{fig/fig_seq_time_recall_k_lin.pdf}
+    \caption{5つのデータセットに対する各$k$でのマージ時間（上段）とRecall@$k$（下段）}
+    \label{fig:merge-result}
+\end{figure*}
+
+\subsection{評価指標}
+計算効率を評価するため、マージ時間を測定する。
+また、Recall@$k$および平均距離比$\meandist$を用いて、グラフの品質を評価する。
+$N(\vb{v})$を全探索によって求めた点$\vb{v}$の正確な$k$個の近傍点とし、$\widehat{N}(\vb{v})$を構築されたグラフから得られる$k$個の近傍点とする。
+評価用データ点集合$V'\subset V$に対して、Recall@$k$を次のように定義する。
+\begin{equation*}
+    \mathrm{Recall}@k
+    =
+    \frac{1}{|V'|}\sum_{\vb{v}_i \in V'}^{}\frac{\left|\widehat{N}(\vb{v}_i) \cap N(\vb{v}_i)\right|}{k}.
+\end{equation*}
+SIFT10MおよびGIST1Mについては、ランダムにサンプリングした10,000点を評価に用いた。
+Recallに加えて、近似近傍点が厳密な近傍点と完全には一致しない場合でも、その近傍点の品質を評価するため、平均距離比
+\begin{equation}
+    \label{eq:meandist}
+    R_{\mathrm{dist}}
+    =
+    \frac{1}{|V'|}
+    \sum_{\vb{v}\in V'}
+    \dfrac{
+        \displaystyle\sum_{\vb{u}\in\widehat{N}(\vb{v})} d(\vb{v},\vb{u})
+    }{
+        \displaystyle\sum_{\vb{u}\in N(\vb{v})} d(\vb{v},\vb{u})
+    }
+\end{equation}
+を測定する。ここで、$d$はユークリッド距離関数を表す。
+なお、この比が1であることは、近傍点までの距離の総和が、正確な$k$-近傍グラフのものと一致することを意味する。
+
+\subsection{パラメータ設定}
+% TL-Mergeを、S-Merge \cite{zhao_merge_2022}およびLG$^2$-Merge \cite{hashimoto_lg2merge}と比較する。
+LG$^2$-MergeのLSHパラメータについては、$L=4$、$K=2$、$w=64$と設定した。
+また、NN-Descentの停止閾値$\delta$を0.01と設定した。
+
+特に断りのない限り、TL-Mergeでは表\ref{tab:datasets}に示した上位層のサイズを使用し、
+その他のパラメータは、$\left(k_0, k_{m_0}, k_l, k_m, \tau\right)=\left(10, 20, 10, \min(40, k), 10^{-5}\right)$と設定して実験を行った。
+PCAに基づく距離計算の早期打ち切りについては、MNISTとGIST1Mでは10,000点、SIFTデータセットでは100,000点をサンプリングしてPCAの基底を推定する。
+距離の二乗の部分和は、MNISTとGIST1Mでは16次元ごと、SIFTデータセットでは32次元ごとに確認する。
+
+\subsection{$k$に対するスケーラビリティ}
+図\ref{fig:merge-result}は、各手法の実行時間とRecall@$k$の結果である。
+これはTL-Mergeが比較手法と比べて、$k$に対するスケーラビリティにおいて大幅に優れていることを示している。
+$k$を20から100に増加させた場合、TL-Mergeのマージ時間は2.6--4.8倍の増加にとどまる一方、S-MergeおよびLG$^2$-Mergeでは、13--24倍に増加する。
+この違いは、TL-Mergeが近傍点の展開数に上限を設けることで、比較手法のNN-Descentベースの精製で必要となる近傍点間のペア比較を回避していることに起因すると考えられる。
+その結果、$k$が大きくなるほど、TL-Mergeの性能上の優位性は顕著になる。
+$k=100$では、TL-MergeはLG$^2$-Mergeに対して1.5--6.0倍、S-Mergeに対して2.1--8.1倍の高速化を達成する。
+さらに、TL-Mergeは、評価したすべてのデータセットにおいて、$k \geq 80$で最も高速なマージを実現した。
+
+% 図\ref{fig:stack}に、$k=100$におけるマージ時間の内訳を示す。
+% S-MergeおよびLG$^2$-Mergeでは、処理時間の大部分がNN-Descentベースの精製が占めるのに対し、TL-Mergeでは、上位層探索と初期展開を含む初期化処理が、より大きな割合を占めている。
+% TL-Mergeは、初期化処理において有望なサブグラフ間の近傍点を特定することで、その後のグラフウォークで必要となる処理量を削減する。
+$k=100$において、TL-Mergeの出力グラフのRecallは比較手法よりもやや低いが、Recallと実行時間のトレードオフについては、第\ref{subsec:speed-quality}節で検討する。
+
+% \begin{figure}[t]
+%     \centering
+%     % \includegraphics[width=.8\linewidth]{fig/fig_seq_time_k100_stack_rel_aligned.pdf}
+%     \includegraphics[width=.8\linewidth]{fig/fig_seq_time_k100_stack_rel.pdf}
+%     \caption{$k=100$におけるTL-Mergeのマージ時間を基準とした相対マージ時間。棒グラフの上に示した数値は実際の実行時間を表す。斜線部分は初期化処理を表す。}
+%     \label{fig:stack}
+% \end{figure}
+
+\subsection{品質と効率のトレードオフ}
+\label{subsec:speed-quality}
+
+\begin{table}[t]
+    \centering
+    \caption{$k=100$において、TL-Mergeが達成したRecall@100以上の精度に到達するまでのマージ時間[s]。括弧内はTL-Mergeの高速化率を示す。}
+    \label{tab:isorecall}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{lcrrr}
+        \toprule
+        {\scriptsize データセット} & {\scriptsize Recall} & {\scriptsize TL-Merge} & {\scriptsize LG$^2$-Merge} & {\scriptsize S-Merge} \\
+        \midrule
+        MNIST    & 0.9978 & 25.1   & 117.2 (4.7$\times$)   & 135.3 (5.4$\times$) \\
+        SIFT100K & 0.9917 & 28.9   & 75.3 (2.6$\times$)    & 75.8 (2.6$\times$) \\
+        SIFT1M   & 0.9811 & 556.9  & 999.9 (1.8$\times$)   & 1284.8 (2.3$\times$) \\
+        GIST1M   & 0.8333 & 1374.4 & 3817.7 (2.8$\times$)  & 4119.1 (3.0$\times$) \\
+        SIFT10M  & 0.9675 & 8546.3 & 10948.4 (1.3$\times$) & 16943.3 (2.0$\times$) \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsubsection{同一Recallへの到達時間}
+同一のRecall水準におけるTL-Mergeの効率を評価するため、同一のRecallに到達するまでに必要なマージ時間を計測した。ここでは、$k=100$においてTL-Mergeが達成したRecallに達するまでに、各マージ手法が必要とした時間を計った。
+比較手法については、精製処理を反復間でしか停止できないため、目標値以上のRecallに初めて到達した精製反復までの累積マージ時間を用いた。
+表\ref{tab:isorecall}に示すように、TL-Mergeは5つすべてのデータセットにおいて、比較手法よりも短い時間で目標値に到達し、LG$^2$-Mergeに対して1.3--4.7倍、S-Mergeに対して2.0--5.4倍の高速化を達成する。
+これらの結果は、同一のRecall目標値においても、TL-Mergeが効率面での優位性を維持していることを示している。
+
+% \begin{figure}
+%     \centering
+%     \includegraphics[keepaspectratio, width=.75\linewidth]{fig/fig_sumratio_gist1m_y110.pdf}
+%     \caption{GIST1Mにおける各マージ手法の$k$に対する平均距離比$\meandist$。}
+%     \label{fig:meandist}
+% \end{figure}
+
+\subsubsection{得られた近傍の距離と正確な近傍の距離比}
+Recallは、正確な近傍点をどの程度発見できたかを測定する指標であるが、見つかった近傍点がどの程度近いかは反映しない。そこで、グラフから得られた$k$個の近傍点までの距離の総和と、厳密な$k$個の近傍点までの距離の総和の比として、式\eqref{eq:meandist}で定義した平均距離比$\meandist$についても計測を行った。
+
+$k=100$において、TL-Mergeは評価したすべてのデータセットで1.00005--1.0039の$\meandist$を達成した。
+% 図\ref{fig:meandist}に、GIST1Mにおける$k$に対する$\meandist$を示す。
+GIST1Mでは、TL-MergeのRecall@100は0.8333と比較的低いものの、平均距離比は1.0039である。
+これは、得られた近傍点が厳密な最近傍点と一致しない場合でも、その多くが厳密な最近傍点と同程度の距離に存在することを示している。
+\begin{figure*}[!t]
+    \centering
+    % \includegraphics[width=.85\linewidth]{fig/fig_param_sensitivity.pdf}
+    \includegraphics[keepaspectratio, width=.85\linewidth]{fig/fig_seq_param_sensitivity_rep.pdf}
+    \caption{$k=100$での各パラメータを変化させたときのTL-MergeのRecall（上部）とマージ時間の比（下部）。
+        各列では、1つのパラメータ（$k_0$、$k_{m_0}$、$k_l$、$k_m$）のみを変化させ、
+        その他はデフォルト値に固定し、マージ時間はデフォルト値でのマージ時間を1とした。
+        % 縦の点線はデフォルト値を示す。
+        （SIFT10Mでは、計算コストのため、$k_l \geq 30$または$k_m \geq 80$の設定を省略した）
+        % Top: Recall@100. Bottom: merge time relative to the default setting. Upper-layer sizes follow Table~I; note the logarithmic $x$-axes.
+    }
+    \label{fig:width}
+\end{figure*}
+\begin{figure*}[!t]
+    \centering
+    % \includegraphics[width=.9\linewidth]{fig/fig_seq_ulsize_rel.pdf}
+    \includegraphics[width=.8\linewidth]{fig/fig_seq_ulsize.pdf}
+    \caption{$k=100$における、各サブグラフの上位層サイズに対するTL-Mergeのマージ時間[s]}
+    \label{fig:ulsize}
+\end{figure*}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[keepaspectratio, width=\linewidth]{fig/fig_seq_split_tl_k100_all_yoko.pdf}
+    % \includegraphics[keepaspectratio, width=.8\linewidth]{fig/fig_seq_split_tl_k100_all.pdf}
+    \caption{異なるデータセット分割比に対するマージ時間比（左）とRecall@100（右）。分割比50:50の時間を1とした。}
+    \label{fig:split}
+\end{figure}
 
 
+\subsection{データセット分割比}
+\label{subsec:split}
+TL-Mergeでは、2つのサブグラフが同じサイズである事は仮定しないため、$k=100$において、50:50から99:1までの分割比を評価した。
+図\ref{fig:split}に示すように、TL-MergeはRecallを維持または向上させるとともに、同程度またはより短いマージ時間を達成した。
+これらの結果は、TL-Mergeがサイズの異なる分割データセットにも効果的に適用可能であることを示唆している。
 
-\newpage%%%%%
+\subsection{パラメータ感度}
+\label{subsec:params}
+\subsubsection{探索幅}
+図\ref{fig:width}に、探索幅パラメータがマージ時間とRecall@$k$に与える影響を示す。
+これらの結果は、Recallが主に$k_m$の影響を受け、その影響が$k$の増加に伴って顕著になることを示している。
+例えば、GIST1Mの$k=100$では、$k_m$を5から100に増加させることで、Recallが0.596から0.914に向上する。
 
-%4.6
-\subsection{参考文献・謝辞}
+一方、$k_l$を増加させることは、計算コストに対する効果が比較的小さい。
+SIFT1Mの$k=80$では、$k_l$を10から40に増加させた場合、実行時間が1.70倍となり、Recallは0.9909に達する。
+これに対して、$k_m$を40から80に増加させた場合、実行時間はわずか1.27倍でありながら、Recallはそれよりも高い0.9915に達する。
+% この理由として、近傍点を展開する対象として選択された点同士が空間的に近く、それらの近傍集合が大きく重複する傾向にあることが考えられる。
+% その結果、展開する点数を増やしても、新たに得られる異なる候補点の数は比較的少ない可能性がある。
+% 一方、$k_m$を増加させると、各点から、より多くの近傍点を探索することができる。
 
-%4.6.1
-\subsubsection{参考文献の参照}
+今回実施した評価実験で使用したパラメータ設定のほとんどは、すべてのデータセットに対して必ずしも最適であったとはいえない。これは、TL-Mergeがデータセットごとのチューニングを行わなくても、良いマージを実現できることを示唆している。
+% そのため、この設定を共通のデフォルト値として採用し、必要に応じてトレードオフを調整する際には、$k_m$を主要なパラメータとして使用する。
 
-%
+\subsubsection{上位層のサイズ}
+% 上位層のサイズは、初期化処理とグラフウォークの計算コストのトレードオフを制御する。
+図\ref{fig:ulsize}に示すように、上位層のサイズを増加させると、距離計算回数の増加によって初期化時間が長くなった一方、その後のグラフウォークに必要な時間は短くなった。
+しかし、上位層が大きくなるにつれて、グラフウォーク時間の削減効果は小さくなり、
+しかし、上位層が大きくなるにつれて、グラフウォーク時間の削減効果は小さくなり、上位層サイズのある程度広い範囲において、総マージ時間は最小値に近い状態を維持する。
+特に、各サブグラフで1,000点を使用した場合、5つすべてのデータセットにおいて、観測された最良の設定に対するマージ時間の差は2\%以内であり、Recallの変動は0.005未満である。
 
-が得られる．
+特に、MNIST、SIFT100K、SIFT1Mでは、データセットのサイズが10倍以上異なるにもかかわらず、最適な上位層サイズはいずれも各サブグラフあたり約1,000点である。
+また、最適なサイズが2,500点であるGIST1Mにおいても、上位層サイズが250点から2,500点までの範囲で、マージ時間の変動はわずか3\%である。
+これらの結果は、ランダムサンプリングによってデータ分布をよく反映した形で上位層が作成され、そこから効率よく探索開始点が得られており、データセットのサイズが異なっても、比較的小規模な上位層で十分であることを示唆している。
+% 評価実験で使用した設定においても、網羅的なパラメータ調整を行うことなく、大幅な高速化を達成した。
 
-%4.6.2
-\subsubsection{参考文献リスト}
-参考文献リストには，
-原則として本文中で引用した文献のみを列挙する．
-順序は参照順あるいは第一著者の苗字のアルファベット順とする．
-文献リストはBiB\TeX と\verb+ipsjunsrt.bst+（参照順）
-または\verb+ipsjsort.bst+（アルファベット順）を用いて作り，
-\verb+\bibliograhpystyle+と\verb+\bibliography+コマンドにより
-利用することが出来る．
-これらを用いれば，
-規定の体裁にあったものができるので，
-できるだけ利用していただきたい．
-また製版用のファイル群には\verb+.bib+ファイルではなく\verb+.bbl+ファイルを
-必ず含めることに注意されたい．
-一方，何らかの理由でthebibliography環境で文献リストを
-「手作り」しなければならない場合は，
-このガイドの参考文献リストを注意深く見て，
-そのスタイルにしたがっていただきたい．
+% \subsubsection{構成要素}
+% 双方向更新により、Recall@$k$は0.6--6.0ポイント向上する一方、マージ時間の変化は$-11$\%から$+7$\%の範囲にとどまる。
+% また、PCAに基づく距離計算の早期打ち切りにより、GIST1MではTL-Mergeが最大2.0倍高速化され、Recallの変化は浮動小数点演算の丸め誤差による$10^{-4}$未満のものに限られる。
 
-
-
-
-%4.6.3
-\subsubsection{謝辞}
-
-
-
-
-
-%5
-\section{論文内容に関する指針}
-
-論文の内容について，
-論文誌ジャーナル編集委員会で作成した「べからず集」を以下に示す．
-投稿前のチェックリストとして利用頂きたい．
-これ以外にも，査読者用，
-メタ査読者用の「べからず集」\cite{webpage2}も公開しているので，
-参照されたい．
-また，作文技術に関する \cite{book1, book2, book3, book4}のような書籍も参考になる．
-
-
-
-%5.1
-\subsection{書き方の基本}
-
-\begin{itemize}
- \item[$\Box$] 研究の新規性，有用性，信頼性が読者に伝わるように記述する．
- \item[$\Box$] 読み手に，読みやすい文章を心がける（内容が前後する，背景・
-	       課題の設定が不明瞭などは読者にとって負担）．
- \item[$\Box$] 解決すべき問題が汎用化（一般的に記述）されていないのは再
-	       考を要する（XX大学の問題という記述に終始）．あるいは，
-	       （単に「作りました」だけで）解決すべき問題そのものの記述
-	       がないのは再考を要する．
- \item[$\Box$] 結論が明確に記されていない，または，範囲，限界，問題点な
-	       どの指摘が適切ではない，または，結論が内容にそったもので
-	       はないものは再考を要する．
- \item[$\Box$] 科学技術論文として不適当な表現や，分かりにくい表現がある
-	       のは再考を要する．
- \item[$\Box$] 極端な口語体や，長文の連続などは再考を要する．
- \item[$\Box$] 章，節のたて方，全体の構成等が適切でない文章は再考を要す
-	       る．
- \item[$\Box$] 文中の文脈から推測しないと内容の把握が困難な論文にしない．
- \item[$\Box$] 説明に飛躍した点があり，仮説等の説明が十分ではないのは再
-	       考を要する．
- \item[$\Box$] 説明に冗長な点，逆に簡単すぎる点があるのは再考を要する．
- \item[$\Box$] 未定義語を減らす．
-\end{itemize}
-
-
-%5.2
-\subsection{新規性と有効性を明確に示す}
-
-\begin{itemize}
- \item[$\Box$] 在来研究との関連，研究の動機，ねらい等が明確に説明されて
-	       いないのは再考を要する．
- \item[$\Box$] 既知／公知の技術が何であって，何を新しいアイデアとして提
-	       案しているのかが書かれていないのは再考を要する．
- \item[$\Box$] 十分な参考文献は新規性の主張に欠かせない．
- \item[$\Box$] 提案内容の説明が，概念的または抽象的な水準に終始していて，
-	       読者が提案内容を理解できない（それだけで新規性が感じられ
-	       ないもの）のは再考を要する．
- \item[$\Box$] 論文で提案した方法の有効性の主張がない，またはきわめて貧
-	       弱なのは再考を要する．
-\end{itemize}
-
-%5.3
-\subsection{書き方に関する具体的な注意}
-
-\begin{itemize}
- \item[$\Box$] 和文標題が内容を適切に表現していないのは再考を要する．
- \item[$\Box$] 英文標題が内容を適切に表現していない，または英語として適
-	       切でないのは再考を要する．
- \item[$\Box$] アブストラクトが主旨を適切に表現していない，または英文が
-	       適切ではないのは再考を要する．
- \item[$\Box$] 記号・略号等が周知のものでなく，または，用語が適切でなく，
-	       または，図・表の説明が適当ではないのは再考を要する．
- \item[$\Box$] 個人的あるいは非常に小さなグループ／企業だけで通用するよ
-	       うな用語が特別な説明もなしに多用されているのは再考を要す
-	       る．
- \item[$\Box$] 図表自体は十分に明確ではない，または誤りがあるのは再考を
-	       要する．
- \item[$\Box$] 図表が鮮明ではないのは再考を要する．
- \item[$\Box$] 図表が大きさ，縮尺の指定が適切でないのは再考を要する.
-\end{itemize}
-
-%5.4
-\subsection{参考文献}
-
-\begin{itemize}
- \item[$\Box$] 参考文献は10件以上必要（分野によっては20件以上，30件以上
-	       という意見もある）.
- \item[$\Box$] 十分な参考文献は新規性の主張に欠かせない．
- \item[$\Box$] 適切な文献が引用されておらず，その数も適切ではないのは再
-	       考を要する．
- \item[$\Box$] 日本人によるしかるべき論文を引用することで日本人研究コミュ
-	       ニティの発展につながる．
- \item[$\Box$] 参考文献は自分のものばかりではだめ．
-\end{itemize}
-
-%5.5
-\subsection{二重投稿}
-
-\begin{itemize}
- \item[$\Box$] 二重投稿はしてはならない ─ ただし国際会議に採択された論
-	       文を著作権が問題にならないように投稿することは構わない．
- \item[$\Box$] 他の論文とまったく同じ図表を引用の明示なしに利用すること
-	       は禁止．
- \item[$\Box$] 既発表の論文等との間に重複があるのは再考を要する．
-\end{itemize}
-
-%5.6
-\subsection{他の人に読んでもらう}
-
-\begin{itemize}
- \item[$\Box$] 投稿経験が少ない人は，採録された経験の豊富な人に校正して
-	       もらう．
- \item[$\Box$] 読者の立場から見て論理的な飛躍がないかに注意して記述する．
-\end{itemize}
-
-%5.7
-\subsection{その他}
-
-\begin{itemize}
- \item[$\Box$] 投稿前にチェックリストの各項目を満たしているか，必ず確認
-	       する． 
-\end{itemize}
-
-%6
 \section{おわりに}
+\label{sec:conc}
+本論文では、ランダムサンプリングを用いた二層構造の$k$-近傍グラフマージ手法であるTL-Mergeを提案した。
+TL-Mergeは、上位層を用いた初期化と探索幅を制限したグラフ探索を組み合わせることで、計算コストの高い近傍点間のペア比較を削減した。さらに、PCAに基づく距離計算の早期打ち切りと双方向の更新により、計算コストを削減した。
+5つのデータセットを用いた実験により、TL-Mergeは競争力のあるグラフ品質を維持しながら、$k=100$においてS-Mergeに対して最大8.1倍の高速化を達成することを示した。
+また、$k$を20から100に増加させた際、比較手法ではマージ時間が13--24倍に増加するのに対し、TL-Mergeでは2.6--4.8倍の増加にとどまり、$k$に関して高いスケーラビリティを持つことを示した。
+さらに、TL-Mergeは、網羅的なパラメータ調整を行わなくても、比較的小規模な上位層を使用することで良好な性能を達成する。
 
-本稿では，A4縦型2段組み用に変更したスタイルファイルを用いた論文のフォー
-マット方法と，論文誌ジャーナル編集委員会がまとめた「べからず集」に基づく
-論文の書き方を示した．内容的にまだ不十分の部分が多いため，意見，要望等を
-\begin{quote}
- \|editt@ipsj.or.jp|
-\end{quote}
-までお寄せ頂きたい．
-\cite{boutet_being_2016}
+今後は、TL-Mergeの効率性と適用可能性のさらなる向上に取り組むことが課題である。
+特に、近似最近傍探索を用いて上位層探索を高速化することで、$k$が比較的小さい場合を中心に、初期化処理のオーバーヘッドを削減することを目指す。
+また、難易度の高いデータセットにおいても精度良くサブグラフ間の近傍点を検出できるようにすることや、$\ell$-wayマージマージへ拡張することも目指す。
 
 
 \begin{acknowledgment}
-A4横型に対するガイドを基に，本稿を作成した．
-クラスファイルの作成においては，
-京都大学の中島　浩氏にさまざまなご教示を頂き，
-さらにBiB\TeX 関連ファイルの利用についても快諾頂いたことを深謝する．
-また，A4横型に対するガイドを作成された当時の編集委員会の担当者に深謝する．
+本研究はJST CREST JPMJCR22M2ならびにJSPS科研費JP23K28091,JP23K28383,JP25H01167の助成を受けたものである。
 \end{acknowledgment}
 
 
 \bibliographystyle{ipsjunsrt}
 \bibliography{references}
-
-
-\begin{thebibliography}{10}
-
-\bibitem{okumura}
-奥村晴彦：改訂第5版\LaTeXe 美文書作成入門，
-技術評論社(2010).
-
-\bibitem{companion}
-Goossens, M., Mittelbach, F. and Samarin, A.:
-{\it The LaTeX Companion},
-Addison Wesley, Reading, Massachusetts (1993).
-
-\bibitem{book1}
-木下是雄：
-理科系の作文技術，
-中公新書(1981).
-
-\bibitem{book2}
-Strunk W. J. and White E.B.:
-{\it The Elements of Style, Forth Edition},
-Longman (2000).
-
-\bibitem{book3}
-Blake G. and Bly R.W.:
-{\it The Elements of Technical Writing},
-Longman (1993).
-
-\bibitem{book4}
-Higham N.J.:
-{\it Handbook of Writing for the Mathematical Sciences},
-SIAM (1998).
-
-\bibitem{webpage1}
-情報処理学会論文誌ジャーナル編集委員会：
-投稿者マニュアル(online)，
-\urlj{http://www.ipsj.or.jp/journal /submit/manual/j\_manual.html}
-(2007.04.05).
-
-\bibitem{webpage2}
-情報処理学会論文誌ジャーナル編集委員会：
-べからず集(online)，
-\urlj{http://www.ipsj.or.jp/journal/manual /bekarazu.html}
-(2011.09.15).
-
-\end{thebibliography}
 
 
 
