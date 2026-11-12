@@ -487,26 +487,26 @@ $k=100$において、TL-Mergeは評価したすべてのデータセットで1.
 % 図\ref{fig:meandist}に、GIST1Mにおける$k$に対する$\meandist$を示す。
 GIST1Mでは、TL-MergeのRecall@100は0.8333と比較的低いものの、平均距離比は1.0039である。
 これは、得られた近傍点が厳密な最近傍点と一致しない場合でも、その多くが厳密な最近傍点と同程度の距離に存在することを示している。
-\begin{figure*}[!t]
-    \centering
-    % \includegraphics[width=.85\linewidth]{fig/fig_param_sensitivity.pdf}
-    \includegraphics[keepaspectratio, width=.85\linewidth]{fig/fig_seq_param_sensitivity_rep.pdf}
-    \caption{$k=100$での各パラメータを変化させたときのTL-MergeのRecall（上部）とマージ時間の比（下部）。
-        各列では、1つのパラメータ（$k_0$、$k_{m_0}$、$k_l$、$k_m$）のみを変化させ、
-        その他はデフォルト値に固定し、マージ時間はデフォルト値でのマージ時間を1とした。
-        % 縦の点線はデフォルト値を示す。
-        （SIFT10Mでは、計算コストのため、$k_l \geq 30$または$k_m \geq 80$の設定を省略した）
-        % Top: Recall@100. Bottom: merge time relative to the default setting. Upper-layer sizes follow Table~I; note the logarithmic $x$-axes.
-    }
-    \label{fig:width}
-\end{figure*}
-\begin{figure*}[!t]
-    \centering
-    % \includegraphics[width=.9\linewidth]{fig/fig_seq_ulsize_rel.pdf}
-    \includegraphics[width=.8\linewidth]{fig/fig_seq_ulsize.pdf}
-    \caption{$k=100$における、各サブグラフの上位層サイズに対するTL-Mergeのマージ時間[s]}
-    \label{fig:ulsize}
-\end{figure*}
+% \begin{figure*}[!t]
+%     \centering
+%     % \includegraphics[width=.85\linewidth]{fig/fig_param_sensitivity.pdf}
+%     \includegraphics[keepaspectratio, width=.85\linewidth]{fig/fig_seq_param_sensitivity_rep.pdf}
+%     \caption{$k=100$での各パラメータを変化させたときのTL-MergeのRecall（上部）とマージ時間の比（下部）。
+%         各列では、1つのパラメータ（$k_0$、$k_{m_0}$、$k_l$、$k_m$）のみを変化させ、
+%         その他はデフォルト値に固定し、マージ時間はデフォルト値でのマージ時間を1とした。
+%         % 縦の点線はデフォルト値を示す。
+%         （SIFT10Mでは、計算コストのため、$k_l \geq 30$または$k_m \geq 80$の設定を省略した）
+%         % Top: Recall@100. Bottom: merge time relative to the default setting. Upper-layer sizes follow Table~I; note the logarithmic $x$-axes.
+%     }
+%     \label{fig:width}
+% \end{figure*}
+% \begin{figure*}[!t]
+%     \centering
+%     % \includegraphics[width=.9\linewidth]{fig/fig_seq_ulsize_rel.pdf}
+%     \includegraphics[width=.8\linewidth]{fig/fig_seq_ulsize.pdf}
+%     \caption{$k=100$における、各サブグラフの上位層サイズに対するTL-Mergeのマージ時間[s]}
+%     \label{fig:ulsize}
+% \end{figure*}
 
 \begin{figure}[t]
     \centering
@@ -516,7 +516,6 @@ GIST1Mでは、TL-MergeのRecall@100は0.8333と比較的低いものの、平�
     \label{fig:split}
 \end{figure}
 
-
 \subsection{データセット分割比}
 \label{subsec:split}
 TL-Mergeでは、2つのサブグラフが同じサイズである事は仮定しないため、$k=100$において、50:50から99:1までの分割比を評価した。
@@ -525,15 +524,14 @@ TL-Mergeでは、2つのサブグラフが同じサイズである事は仮定�
 
 \subsection{パラメータ感度}
 \label{subsec:params}
-\subsubsection{探索幅}
-探索幅を制御するパラメータは大きく4種類存在する。$k_0, k_{m_0}$は上位層探索・初期展開を制御し、
-
+% \subsubsection{探索幅}
+% 探索幅を制御するパラメータは大きく4種類存在する。$k_0, k_{m_0}$は上位層探索・初期展開を制御し、
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 旧バージョン
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsection{パラメータ感度}
-\label{subsec:params}
-\subsubsection{探索幅}
+% \subsection{パラメータ感度}
+% \label{subsec:params}
+% \subsubsection{探索幅}
 % 図\ref{fig:width}に、探索幅パラメータがマージ時間とRecall@$k$に与える影響を示す。
 % これらの結果は、Recallが主に$k_m$の影響を受け、その影響が$k$の増加に伴って顕著になることを示している。
 % 例えば、GIST1Mの$k=100$では、$k_m$を5から100に増加させることで、Recallが0.596から0.914に向上する。
@@ -563,6 +561,31 @@ TL-Mergeでは、2つのサブグラフが同じサイズである事は仮定�
 % \subsubsection{構成要素}
 % 双方向更新により、Recall@$k$は0.6--6.0ポイント向上する一方、マージ時間の変化は$-11$\%から$+7$\%の範囲にとどまる。
 % また、PCAに基づく距離計算の早期打ち切りにより、GIST1MではTL-Mergeが最大2.0倍高速化され、Recallの変化は浮動小数点演算の丸め誤差による$10^{-4}$未満のものに限られる。
+
+% 探索幅パラメータと上位層のサイズをそれぞれ変化させ、マージ時間とRecall@$k$への影響も検証した。
+% Recallに最も大きく影響したのは$k_m$であり、その影響は$k$が大きいほど顕著であった。実際、GIST1Mの$k=100$では、$k_m$を5から100に増やすとRecallが0.596から0.914に向上した。
+
+% $k_0$と$k_{m_0}$の影響はこれらよりも小さく、Recallの変化が最も大きかったGIST1Mでも、$k_0$を1〜40で変化させた場合には0.001、$k_{m_0}$を5〜100で偏差させた場合は0.003であり、$k_m$によるRecall@$k$の変化0.318と比べて1\%未満であった。
+% マージ時間の変化も、$k_0$では0.90〜1.25倍、$k_{m_0}$では0.99〜1.20倍の範囲にとどまり、$k_m$(0.30〜1.80倍)や$k_l$(0.81〜3.38倍)より小さかった。
+
+% 一方、$k_l$を増加させた場合にはRecallは向上するが、同程度の時間増加で比べると改善幅は$k_m$より小さかった。
+% $k_0$と$k_{m0}$はRecallにほとんど影響せず、マージ時間の変化も最大で25\%程度であった。
+% 上位層のサイズを大きくすると、初期化時間は増加する一方でグラフウォーク時間は減少し、総マージ時間は広い範囲で最小値付近にとどまった。各サブグラフあたり1,000点付近が最短のマージ時間を実現するが、全データセットでマージ時間は最良の設定から2\%以内であった。
+% また、Recallは上位層のサイズによらずほぼ一定であった。
+% 以上より、パラメータをデータセットごとにチューニングしなくても良好なマージが得られ、Recallと時間のトレードオフは主に$k_m$で調整できる。
+探索幅パラメータ$(k_0, k_{m_0}, k_l, k_m)$と上位層の点数を各々1つずつ変化させ、マージ時間とRecall@$k$への影響を$k=100$において調べた。
+その結果、Recallに最も大きく影響したのは$k_m$であり、その影響は$k$が大きいほど顕著であった。
+実際、$k_m$を5から100に増やすと、GIST1MのRecallは0.596から0.914に向上したのに対し、$k_l$を同じ範囲で増やしても0.802から0.878への向上にとどまった。
+% さらに$k_l$は時間の増加も大きく、GIST1Mで100としたときのマージ時間は、$k_m$では1.80倍であったのに対し、$k_l$では2.41倍であった。
+さらに、SIFT1Mにおいて各$k_l, k_m$の条件でRecall@100が0.994に達するのに要したマージ時間は、$k_l$では$k_m$が要した時間の2.27倍であった。
+一方、$k_0$を1から40に、$k_{m_0}$を5から100に変化させた時には、Recallにほとんど影響しなかった。
+
+上位層の点数を各サブグラフあたり10点から5,000点に増加させると、
+% 初期化時間は増加し、グラフウォーク時間は減少した。
+% Recallは点数によらずほぼ一定であるが(高々0.004以下)、1,000点から5,000点に増やすと、今回実験で使用した上位層点数での実行時間と比べてマージ時間が3〜17\%長くなった。
+Recallは点数によらずほぼ一定であるが、1,000点から5,000点に増やすと、今回実験で使用した上位層点数での実行時間と比べてマージ時間が3〜17\%長くなった。
+
+以上より、上位層の点数についても、パラメータをデータセットごとにチューニングしなくても良好なマージが得られ、Recallと時間のトレードオフは主に$k_m$で調整できると言える。
 
 \section{おわりに}
 \label{sec:conc}
